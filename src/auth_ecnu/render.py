@@ -22,6 +22,14 @@ except ImportError:  # pragma: no cover - exercised only when rich is missing.
     box = None  # type: ignore[assignment]
 
 
+HACKER_BORDER = "bright_green"
+HACKER_DIM = "dim green"
+HACKER_FIELD = "bold bright_green"
+HACKER_VALUE = "green"
+HACKER_ALERT = "bold red"
+HACKER_PANEL = "black on green"
+
+
 def print_json(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
 
@@ -34,6 +42,25 @@ def _console() -> Any:
     if Console is None:
         return None
     return Console()
+
+
+def _terminal_title(title: str) -> str:
+    return f"[{HACKER_PANEL}] {title.upper()} [/]"
+
+
+def _state_label(enabled: bool) -> str:
+    return "[bold bright_green][ONLINE][/]" if enabled else "[bold red][OFFLINE][/]"
+
+
+def _value(value: Any) -> str:
+    text = str(value) if value not in (None, "") else "-"
+    return f"[{HACKER_VALUE}]{text}[/]"
+
+
+def _jsonish(value: Any) -> str:
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
 
 
 def _status_ip(status: OnlineStatus) -> str:
@@ -66,13 +93,20 @@ def render_status(status: OnlineStatus, output: str) -> None:
             print(f"IP: {payload['ip']}")
         return
 
-    table = Table(box=box.SIMPLE, show_header=False)
-    table.add_column("Field", style="cyan", no_wrap=True)
-    table.add_column("Value")
-    table.add_row("Online", "yes" if status.online else "no")
-    table.add_row("Username", status.username or "-")
-    table.add_row("IP", str(payload.get("ip") or "-"))
-    console.print(Panel(table, title="ECNU Network Status", border_style="green" if status.online else "red"))
+    table = Table(box=box.SQUARE, show_header=False, pad_edge=True)
+    table.add_column("FIELD", style=HACKER_FIELD, no_wrap=True)
+    table.add_column("VALUE", style=HACKER_VALUE)
+    table.add_row("STATE", _state_label(status.online))
+    table.add_row("USER", _value(status.username))
+    table.add_row("IP", _value(payload.get("ip")))
+    console.print(
+        Panel(
+            table,
+            title=_terminal_title("ECNU NET STATUS"),
+            subtitle=f"[{HACKER_DIM}]rad_user_info[/]",
+            border_style=HACKER_BORDER if status.online else HACKER_ALERT,
+        )
+    )
 
 
 def auth_response_payload(body: str, decoder: Any) -> dict[str, Any]:
@@ -96,12 +130,19 @@ def render_auth_response(title: str, body: str, output: str, decoder: Any) -> No
             print(f"{key}: {value}")
         return
 
-    table = Table(box=box.SIMPLE, show_header=False)
-    table.add_column("Field", style="cyan", no_wrap=True)
-    table.add_column("Value")
+    table = Table(box=box.SQUARE, show_header=False, pad_edge=True)
+    table.add_column("FIELD", style=HACKER_FIELD, no_wrap=True)
+    table.add_column("VALUE", style=HACKER_VALUE)
     for key, value in payload.items():
-        table.add_row(str(key), json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value))
-    console.print(Panel(table, title=title, border_style="blue"))
+        table.add_row(str(key).upper(), _value(_jsonish(value)))
+    console.print(
+        Panel(
+            table,
+            title=_terminal_title(title),
+            subtitle=f"[{HACKER_DIM}]portal response[/]",
+            border_style=HACKER_BORDER,
+        )
+    )
 
 
 def request_payload(request: Mapping[str, str]) -> dict[str, Any]:
@@ -129,13 +170,26 @@ def render_request(title: str, request: Mapping[str, str], output: str) -> None:
         print(payload["query"])
         return
 
-    table = Table(box=box.SIMPLE, show_header=False)
-    table.add_column("Field", style="cyan", no_wrap=True)
-    table.add_column("Value")
-    table.add_row("Action", request.get("action", "-"))
-    table.add_row("Username", request.get("username", "-"))
-    table.add_row("AC ID", request.get("ac_id", "-"))
-    table.add_row("IP", request.get("ip", "-"))
-    table.add_row("Checksum", request.get("chksum", "-"))
-    console.print(Panel(table, title=title, border_style="blue"))
-    console.print(Panel(Syntax(payload["query"], "text", word_wrap=True), title="Query String", border_style="dim"))
+    table = Table(box=box.SQUARE, show_header=False, pad_edge=True)
+    table.add_column("FIELD", style=HACKER_FIELD, no_wrap=True)
+    table.add_column("VALUE", style=HACKER_VALUE)
+    table.add_row("ACTION", _value(request.get("action")))
+    table.add_row("USER", _value(request.get("username")))
+    table.add_row("AC_ID", _value(request.get("ac_id")))
+    table.add_row("IP", _value(request.get("ip")))
+    table.add_row("SHA1", _value(request.get("chksum")))
+    console.print(
+        Panel(
+            table,
+            title=_terminal_title(title),
+            subtitle=f"[{HACKER_DIM}]preview only: not submitted[/]",
+            border_style=HACKER_BORDER,
+        )
+    )
+    console.print(
+        Panel(
+            Syntax(payload["query"], "text", theme="monokai", word_wrap=True),
+            title=_terminal_title("QUERY PAYLOAD"),
+            border_style=HACKER_DIM,
+        )
+    )

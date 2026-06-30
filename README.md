@@ -56,8 +56,8 @@ the commands above unless you are running Git Bash or WSL.
 
 ## Commands
 
-Default output is human-friendly Rich rendering. With a config file, common
-commands stay short:
+Default output is human-friendly Rich rendering with terminal-style panels.
+With a config file, common commands stay short:
 
 ```bash
 auth_ecnu auth --username USER --ask-password
