@@ -23,7 +23,7 @@ Windows 用法、前置条件、对应的卸载流程。
 ## 几个常用命令
 
 ```bash
-auth_ecnu auth   -u USER --ask-password               # 登录
+auth_ecnu login  -u USER --ask-password               # 登录
 auth_ecnu check                                       # 我在线吗？
 auth_ecnu logout -u USER                              # 注销
 auth_ecnu check --json                                # 给脚本用

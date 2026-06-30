@@ -3,6 +3,23 @@
 Notable changes per release. Schema follows [Keep a Changelog](https://keepachangelog.com/)
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-06-30
+
+### Removed (breaking)
+- **`banner` subcommand** — purely decorative; `auth_ecnu --version`
+  covers the version-detection use case.
+- **`auth` subcommand** — was an alias for `login`. Use `login`.
+- **`status` subcommand** — was an alias for `check`. Use `check`.
+
+The CLI surface collapses to: `login`, `logout`, `check`, `config`,
+`input-template`. `--in-json` `action` field correspondingly accepts
+only `login`/`logout`/`check`.
+
+### Changed
+- `_INPUT_TEMPLATES` no longer contains alias entries. The
+  `input-template --action` choices shrink to the three canonical
+  actions.
+
 ## [0.4.0] — 2026-06-30
 
 ### Added

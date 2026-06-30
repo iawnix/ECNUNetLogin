@@ -111,21 +111,6 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["version"], __version__)
         self.assertEqual(payload["meta"]["schema_version"], 1)
 
-    def test_status_alias_routes_to_check(self) -> None:
-        class FakeClient:
-            def check_online_status(self) -> OnlineStatus:
-                return OnlineStatus(online=False, raw="not_online_error")
-
-        stdout = io.StringIO()
-        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
-            with redirect_stdout(stdout):
-                rc = main(["status", "--host", "portal.example", "--json"])
-
-        self.assertEqual(rc, 0)
-        payload = json.loads(stdout.getvalue())
-        self.assertFalse(payload["online"])
-        self.assertEqual(payload["meta"]["command"], "status")
-
     def test_parse_auth_setting(self) -> None:
         setting = parse_setting_text(
             "\n".join(
@@ -159,7 +144,7 @@ class AuthEcnuTests(unittest.TestCase):
             with redirect_stdout(stdout):
                 rc = main(
                     [
-                        "auth",
+                        "login",
                         "--config",
                         str(config_path),
                         "--username",
@@ -178,7 +163,7 @@ class AuthEcnuTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["request"]["action"], "login")
         self.assertEqual(payload["request"]["ac_id"], "1")
-        self.assertEqual(payload["meta"]["command"], "auth")
+        self.assertEqual(payload["meta"]["command"], "login")
 
     def test_missing_host_emits_structured_error_to_stderr(self) -> None:
         stdout = io.StringIO()
@@ -239,15 +224,6 @@ class AuthEcnuTests(unittest.TestCase):
                 setting = load_auth_setting(None)
             self.assertEqual(setting.host, "")
             self.assertIsNone(setting.acid)
-
-    def test_banner_subcommand_emits_json_with_meta(self) -> None:
-        stdout = io.StringIO()
-        with redirect_stdout(stdout):
-            rc = main(["banner", "--json"])
-        self.assertEqual(rc, 0)
-        payload = json.loads(stdout.getvalue())
-        self.assertIn("banner", payload)
-        self.assertEqual(payload["meta"]["command"], "banner")
 
     def test_network_step_is_noop_in_json_mode(self) -> None:
         from auth_ecnu.render import network_step
@@ -376,7 +352,7 @@ class AuthEcnuTests(unittest.TestCase):
 
             stdout = io.StringIO()
             with redirect_stdout(stdout):
-                rc = main(["auth", "--in-json", str(in_json)])
+                rc = main(["login", "--in-json", str(in_json)])
 
         self.assertEqual(rc, 0)
         payload = json.loads(stdout.getvalue())
@@ -402,7 +378,7 @@ class AuthEcnuTests(unittest.TestCase):
             # --username on CLI must override the JSON value.
             with redirect_stdout(stdout):
                 rc = main([
-                    "auth", "--in-json", str(in_json),
+                    "login", "--in-json", str(in_json),
                     "--username", "bob", "--json",
                 ])
 
@@ -420,6 +396,19 @@ class AuthEcnuTests(unittest.TestCase):
                 rc = main(["--in-json", str(in_json)])
             self.assertEqual(rc, 2)
             self.assertIn("action", stderr.getvalue())
+
+    def test_in_json_rejects_removed_alias_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            in_json = Path(tmpdir) / "run.json"
+            in_json.write_text(json.dumps({"schema_version": 1, "action": "auth"}),
+                               encoding="utf-8")
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                rc = main(["--json", "--in-json", str(in_json)])
+            self.assertEqual(rc, 2)
+            payload = json.loads(stderr.getvalue())
+            self.assertIn("action", payload["error"]["message"])
+            self.assertIn("auth", payload["error"]["message"])
 
     def test_in_json_unsupported_schema_version_errors(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -24,7 +24,7 @@
 ```json
 "meta": {
   "tool": "auth_ecnu",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "command": "check",
   "schema_version": 1
 }
@@ -33,12 +33,12 @@
 `schema_version` 是本文档承诺的契约，下游脚本应基于该整数做分支；
 未来不兼容的 schema 变更会递增该号。
 
-### `check` / `status`
+### `check`
 
 ```json
 {
   "ip": "198.51.100.10",
-  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.4.0" },
+  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.5.0" },
   "online": true,
   "raw": "alice,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "alice"
@@ -50,21 +50,21 @@
 - `username` / `ip` —— 从 `raw` 中解析；可能为空。
 - `raw` —— 门户原始记录，留作调试。
 
-### `login` / `auth` / `logout`
+### `login` / `logout`
 
 解码后的 JSONP 响应 + `meta`。字段名随 SRun 部署而异
 （`error`、`suc_msg`、有时还多几个）。需要稳定的成功信号时，配
 `--check-after`：
 
 ```bash
-auth_ecnu auth -u alice --ask-password --check-after --json
+auth_ecnu login -u alice --ask-password --check-after --json
 ```
 
 会返回：
 
 ```json
 {
-  "meta": { "command": "auth", ... },
+  "meta": { "command": "login", ... },
   "response": { "error": "ok", "suc_msg": "login_ok" },
   "status":   { "online": true, "username": "alice", "ip": "..." }
 }
@@ -78,7 +78,7 @@ auth_ecnu auth -u alice --ask-password --check-after --json
 
 ```json
 {
-  "meta": { "command": "auth", ... },
+  "meta": { "command": "login", ... },
   "query": "action=login&ac_id=1&username=...",
   "request": {
     "ac_id": "1",
@@ -104,7 +104,7 @@ JSON 模式下错误**写到 stderr**（不是 stdout），格式：
     "code": "network_error",
     "message": "request failed for http://10.0.0.1/cgi-bin/get_challenge: timed out"
   },
-  "meta": { "command": "auth", "schema_version": 1, ... }
+  "meta": { "command": "login", "schema_version": 1, ... }
 }
 ```
 
@@ -149,7 +149,7 @@ bootstrap、config-as-data 场景。
 }
 ```
 
-- `action` —— `login` / `auth` / `logout` / `check` / `status` / `banner`。
+- `action` —— `login` / `logout` / `check`。
   CLI 不带子命令时**必填**。
 - 布尔键的行为类似 `--flag`：`true` 启用，`false` / `null` 忽略。
 - 值字段的空串 / `null` 视为"未设置"。
@@ -169,7 +169,7 @@ auth_ecnu input-template --action check > check.json
 auth_ecnu --in-json run.json
 
 # 2. CLI 指定子命令，JSON 只填剩下的参数。
-auth_ecnu auth --in-json run.json
+auth_ecnu login --in-json run.json
 ```
 
 ### 优先级
@@ -189,7 +189,7 @@ cron 任务），请：
 - 放在任何 git 工作树之外
 - 留意你的备份工具会不会读到它
 - 更好的做法：从密钥管理器读到 stdin：
-  `pass auth_ecnu/alice | auth_ecnu auth -u alice --password-stdin`
+  `pass auth_ecnu/alice | auth_ecnu login -u alice --password-stdin`
 
 ## 例子
 

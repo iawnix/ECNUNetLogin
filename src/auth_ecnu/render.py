@@ -346,7 +346,7 @@ def render_request(title: str, request: Mapping[str, str], output: str, command:
 
 
 # ---------------------------------------------------------------------------
-# Error & banner blocks
+# Error block
 # ---------------------------------------------------------------------------
 
 
@@ -375,31 +375,3 @@ def render_error(error: AuthEcnuError, output: str, command: str = "") -> None:
         subtitle_style=HACKER_WARN,
     )
     console.print(f"{INDENT}[{HACKER_WARN}]{error}[/]", soft_wrap=True)
-
-
-def render_banner(output: str) -> None:
-    """Hacker-style ASCII banner. JSON mode emits the raw text under a key."""
-    if output == "quiet":
-        return
-    if output == "json":
-        print_data({"banner": _BANNER_TEXT}, "banner")
-        return
-    console = _console()
-    if console is None:
-        print(_BANNER_TEXT)
-        return
-    for line in _BANNER_TEXT.splitlines():
-        console.print(f"[{HACKER_HASH}]{line}[/]")
-    console.print(
-        f"[{HACKER_BORDER}]>[/] [{HACKER_FIELD}]auth_ecnu[/] "
-        f"[{HACKER_DIM}]v{__version__} · schema {JSON_SCHEMA_VERSION} · ECNU/SRun campus auth[/]"
-    )
-
-
-_BANNER_TEXT = r"""
-   ___       __  __  ___  ___ _  _ _   _
-  / _ \ /\ /\\ \/ / / _ \/ __| \| | | | |
- | |_| / // / >  < |  __/ (__| .` | |_| |
-  \___/\_, /_/\_\  \___|\___|_|\_|\___/
-       /__/
-""".strip("\n")

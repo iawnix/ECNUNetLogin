@@ -26,7 +26,7 @@ plus a top-level `meta` block. Every error document is an object with
 ```json
 "meta": {
   "tool": "auth_ecnu",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "command": "check",
   "schema_version": 1
 }
@@ -36,12 +36,12 @@ plus a top-level `meta` block. Every error document is an object with
 scripts should branch on the integer; future schema-breaking changes
 bump it.
 
-### `check` / `status`
+### `check`
 
 ```json
 {
   "ip": "198.51.100.10",
-  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.3.0" },
+  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.5.0" },
   "online": true,
   "raw": "alice,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "alice"
@@ -53,21 +53,21 @@ bump it.
 - `username` / `ip` — parsed from `raw`; either may be empty.
 - `raw` — the original portal record; kept for debugging.
 
-### `login` / `auth` / `logout`
+### `login` / `logout`
 
 The decoded JSONP response, plus `meta`. Field names vary across SRun
 deployments (`error`, `suc_msg`, sometimes more). Scripts that need a
 stable success signal should use `--check-after`:
 
 ```bash
-auth_ecnu auth -u alice --ask-password --check-after --json
+auth_ecnu login -u alice --ask-password --check-after --json
 ```
 
 That returns:
 
 ```json
 {
-  "meta": { "command": "auth", ... },
+  "meta": { "command": "login", ... },
   "response": { "error": "ok", "suc_msg": "login_ok" },
   "status":   { "online": true, "username": "alice", "ip": "..." }
 }
@@ -82,7 +82,7 @@ and for offline reproduction tests.
 
 ```json
 {
-  "meta": { "command": "auth", ... },
+  "meta": { "command": "login", ... },
   "query": "action=login&ac_id=1&username=...",
   "request": {
     "ac_id": "1",
@@ -109,7 +109,7 @@ In `json` mode, errors go to **stderr** (not stdout) and use this shape:
     "code": "network_error",
     "message": "request failed for http://10.0.0.1/cgi-bin/get_challenge: timed out"
   },
-  "meta": { "command": "auth", "schema_version": 1, ... }
+  "meta": { "command": "login", "schema_version": 1, ... }
 }
 ```
 
@@ -154,7 +154,7 @@ cron jobs, dotfile bootstrap, and config-as-data workflows.
 }
 ```
 
-- `action` — `login` / `auth` / `logout` / `check` / `status` / `banner`.
+- `action` — `login` / `logout` / `check`.
   **Required** if you don't pass a subcommand on the CLI.
 - Boolean keys behave like `--flag`: `true` enables, `false`/`null` omits.
 - Empty strings and `null` for value keys are treated as "not set".
@@ -167,7 +167,7 @@ cron jobs, dotfile bootstrap, and config-as-data workflows.
 auth_ecnu --in-json run.json
 
 # 2. Subcommand on the CLI; JSON fills in the rest.
-auth_ecnu auth --in-json run.json
+auth_ecnu login --in-json run.json
 ```
 
 ### Precedence
@@ -187,7 +187,7 @@ do it (cron jobs, etc.):
 - Store it outside any git working tree
 - Consider whether your backup tool reads it
 - Prefer reading the password from a secrets manager into stdin:
-  `pass auth_ecnu/alice | auth_ecnu auth -u alice --password-stdin`
+  `pass auth_ecnu/alice | auth_ecnu login -u alice --password-stdin`
 
 ## Examples
 

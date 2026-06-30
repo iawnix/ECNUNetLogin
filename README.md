@@ -24,7 +24,7 @@ prerequisites, and the matching uninstaller.
 ## A few commands
 
 ```bash
-auth_ecnu auth   -u USER --ask-password               # login
+auth_ecnu login  -u USER --ask-password               # login
 auth_ecnu check                                       # am I online?
 auth_ecnu logout -u USER                              # log out
 auth_ecnu check --json                                # for scripts

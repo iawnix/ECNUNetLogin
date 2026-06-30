@@ -20,7 +20,6 @@ from .render import (
     network_step,
     print_data,
     render_auth_response,
-    render_banner,
     render_error,
     render_request,
     render_status,
@@ -188,11 +187,6 @@ def run_check(args: argparse.Namespace) -> int:
     with network_step("querying rad_user_info", args.output):
         status = client.check_online_status()
     render_status(status, args.output, command=_command_name(args), host=getattr(args, "host", ""))
-    return 0
-
-
-def run_banner(args: argparse.Namespace) -> int:
-    render_banner(args.output)
     return 0
 
 
@@ -376,10 +370,6 @@ _INPUT_TEMPLATES: dict[str, dict[str, Any]] = {
         "timeout": 8.0,
     },
 }
-_INPUT_TEMPLATES["auth"] = dict(_INPUT_TEMPLATES["login"], action="auth")
-_INPUT_TEMPLATES["status"] = dict(_INPUT_TEMPLATES["check"], action="status")
-
-
 def run_input_template(args: argparse.Namespace) -> int:
     action = args.template_action
     template = _INPUT_TEMPLATES.get(action)
@@ -413,7 +403,7 @@ def add_common_network_args(parser: argparse.ArgumentParser) -> None:
 
 
 def add_identity_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--username", "-u", required=False, help="account name; required for auth/login/logout")
+    parser.add_argument("--username", "-u", required=False, help="account name; required for login/logout")
     parser.add_argument(
         "--campus-postfix",
         default="",
@@ -489,17 +479,15 @@ def build_parser() -> argparse.ArgumentParser:
     add_in_json_arg(parser)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    for name, helptext in (("login", "fetch token, build request, and submit login"),
-                           ("auth", "alias for login")):
-        sub = subparsers.add_parser(name, help=helptext)
-        add_common_network_args(sub)
-        add_identity_args(sub)
-        add_password_args(sub)
-        add_output_args(sub)
-        add_request_build_args(sub, default_action="login")
-        add_auth_flow_args(sub)
-        add_in_json_arg(sub)
-        sub.set_defaults(func=run_login)
+    login = subparsers.add_parser("login", help="fetch token, build request, and submit login")
+    add_common_network_args(login)
+    add_identity_args(login)
+    add_password_args(login)
+    add_output_args(login)
+    add_request_build_args(login, default_action="login")
+    add_auth_flow_args(login)
+    add_in_json_arg(login)
+    login.set_defaults(func=run_login)
 
     logout = subparsers.add_parser("logout", help="fetch token, build request, and submit logout")
     add_common_network_args(logout)
@@ -510,18 +498,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_in_json_arg(logout)
     logout.set_defaults(func=run_logout)
 
-    for name, helptext in (("check", "query /cgi-bin/rad_user_info"),
-                           ("status", "alias for check")):
-        sub = subparsers.add_parser(name, help=helptext)
-        add_common_network_args(sub)
-        add_output_args(sub)
-        add_in_json_arg(sub)
-        sub.set_defaults(func=run_check)
-
-    banner = subparsers.add_parser("banner", help="print the auth_ecnu ASCII banner")
-    add_output_args(banner)
-    add_in_json_arg(banner)
-    banner.set_defaults(func=run_banner)
+    check = subparsers.add_parser("check", help="query /cgi-bin/rad_user_info")
+    add_common_network_args(check)
+    add_output_args(check)
+    add_in_json_arg(check)
+    check.set_defaults(func=run_check)
 
     # ── config ───────────────────────────────────────────────────────────
     config_cmd = subparsers.add_parser(
@@ -574,10 +555,11 @@ def build_parser() -> argparse.ArgumentParser:
 # --in-json pre-processing
 # ---------------------------------------------------------------------------
 
-_ACTION_SUBCOMMANDS = (
-    "login", "auth", "logout", "check", "status", "banner",
+_TOP_LEVEL_SUBCOMMANDS = (
+    "login", "logout", "check",
     "config", "input-template",
 )
+_JSON_ACTIONS = ("login", "logout", "check")
 
 # JSON key → CLI flag (value-taking)
 _JSON_VALUE_FLAGS = {
@@ -648,7 +630,7 @@ def _argv_has_subcommand(argv: Sequence[str]) -> bool:
             continue
         if tok.startswith("-"):
             continue
-        if tok in _ACTION_SUBCOMMANDS:
+        if tok in _TOP_LEVEL_SUBCOMMANDS:
             return True
     return False
 
@@ -728,9 +710,9 @@ def _expand_in_json(argv: list[str]) -> list[str]:
             raise UsageError(
                 "--in-json needs either a subcommand on the CLI or an 'action' field in the JSON"
             )
-        if action not in _ACTION_SUBCOMMANDS:
+        if action not in _JSON_ACTIONS:
             raise UsageError(
-                f"--in-json 'action' must be one of {_ACTION_SUBCOMMANDS}, got {action!r}"
+                f"--in-json 'action' must be one of {_JSON_ACTIONS}, got {action!r}"
             )
         head.append(action)
 

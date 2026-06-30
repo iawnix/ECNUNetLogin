@@ -52,8 +52,8 @@ campus_url=""
 正确的传凭证方式：
 
 ```bash
-auth_ecnu auth -u alice --ask-password                    # 交互式
-echo "$PASS" | auth_ecnu auth -u alice --password-stdin   # 从环境变量
+auth_ecnu login -u alice --ask-password                    # 交互式
+echo "$PASS" | auth_ecnu login -u alice --password-stdin   # 从环境变量
 auth_ecnu --in-json /run/keys/auth.json                   # 从私有 JSON 文件
 ```
 

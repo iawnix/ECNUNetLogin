@@ -367,12 +367,12 @@ messages and code tables can vary between SRun installations.
 
 Notes on consuming `error`:
 
-- A successful `auth` response also includes `suc_msg=login_ok`. Some
+- A successful login response also includes `suc_msg=login_ok`. Some
   deployments add extra fields (`username`, `online_ip`, billing
   counters). Be defensive: only treat `error == "ok"` as definitive.
 - The error codes are stable across SRun deployments but `suc_msg`
   is not. Scripts that need a reliable success signal should follow
-  up with a `check`/`rad_user_info` call — `auth_ecnu auth
+  up with a `check`/`rad_user_info` call — `auth_ecnu login
   --check-after --json` does this and returns
   `{"response": {...}, "status": {...}}` in one shot.
 

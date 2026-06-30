@@ -7,13 +7,10 @@
 | Subcommand | Purpose                                                       |
 | ---------- | ------------------------------------------------------------- |
 | `login`    | Fetch a challenge token, sign the request, submit it          |
-| `auth`     | Alias for `login`                                             |
 | `logout`   | Same flow as `login`, with `action=logout`                    |
 | `check`    | `GET /cgi-bin/rad_user_info` and print the parsed status      |
-| `status`   | Alias for `check`                                             |
-| `banner`   | Print the auth_ecnu ASCII banner (good for `--json` detection)|
 | `config`   | Manage the auth-setting file: `config init`, `config show`, `config path` |
-| `input-template` | Print a `--in-json` template (`--action login\|auth\|logout\|check\|status`) |
+| `input-template` | Print a `--in-json` template (`--action login\|logout\|check`) |
 
 `auth_ecnu --version` / `-V` prints the tool version.
 
@@ -68,7 +65,7 @@ Pick exactly one of:
 - `--password PASS` / `-p` — risky in shared shells (visible to `ps`,
   shell history). Use one of the next two if at all possible.
 - `--password-stdin` — read the password from stdin
-  (`echo $PASS | auth_ecnu auth -u USER --password-stdin`).
+  (`echo $PASS | auth_ecnu login -u USER --password-stdin`).
 - `--ask-password` — prompt interactively (recommended).
 
 ## Request shaping
@@ -98,7 +95,7 @@ Pick exactly one of:
 
 ```bash
 # Interactive login, rich output
-auth_ecnu auth -u alice --ask-password
+auth_ecnu login -u alice --ask-password
 
 # Check online status as JSON
 auth_ecnu check --host 172.20.20.11 --json
@@ -107,10 +104,10 @@ auth_ecnu check --host 172.20.20.11 --json
 auth_ecnu logout -u alice --quiet
 
 # Inspect the signed request without submitting
-auth_ecnu auth -u alice --ask-password --preview
+auth_ecnu login -u alice --ask-password --preview
 
 # Login then immediately verify, all under one JSON document
-auth_ecnu auth -u alice --ask-password --check-after --json
+auth_ecnu login -u alice --ask-password --check-after --json
 
 # Same login flow but from a JSON file
 auth_ecnu --in-json ~/secure/auth.json

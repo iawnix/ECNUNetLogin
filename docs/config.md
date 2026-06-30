@@ -54,8 +54,8 @@ from a config file by `auth_ecnu`.
 Pass these at runtime instead:
 
 ```bash
-auth_ecnu auth -u alice --ask-password           # interactive
-echo "$PASS" | auth_ecnu auth -u alice --password-stdin   # from env
+auth_ecnu login -u alice --ask-password           # interactive
+echo "$PASS" | auth_ecnu login -u alice --password-stdin   # from env
 auth_ecnu --in-json /run/keys/auth.json          # from a private file
 ```
 

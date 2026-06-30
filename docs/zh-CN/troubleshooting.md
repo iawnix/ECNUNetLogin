@@ -15,7 +15,7 @@
 | `request failed for http://...: timed out`（退出码 `3`）            | 门户连不上。确认是否在校园网或对应 VPN 内；可以调大 `--timeout`。                                                                                       |
 | `invalid host: '...'` / `unsupported URL scheme: '...'`（退出码 `2`）| `host` 参数解析失败，或用了 `http`/`https` 以外的 scheme。                                                                                              |
 | `password is required for login`（退出码 `2`）                      | 登录需要密码。`--username` 配合 `--password` / `--password-stdin` / `--ask-password` 三选一。                                                          |
-| 登录成功但 `check` 显示离线                                          | 门户偶尔会接受认证但接入控制器随后踢掉。建议用 `auth --check-after --json`，读 `status.online`。                                                       |
+| 登录成功但 `check` 显示离线                                          | 门户偶尔会接受认证但接入控制器随后踢掉。建议用 `login --check-after --json`，读 `status.online`。                                                      |
 | Rich 输出显示成乱码 `\x1b[...`                                       | 你的终端不支持 256 色。可以 `\| less -R` 或换 `--json` / `--quiet`。                                                                                    |
 | 安装后 `command not found: auth_ecnu`                                | venv 装的：`source .venv/bin/activate` 或直接调 `.venv/bin/auth_ecnu`；pipx 装的：确认 `~/.local/bin` 在 `PATH` 里。                                    |
 | `--in-json schema_version X not supported`                          | JSON 文件的 schema 版本比当前 auth_ecnu 新。升级 auth_ecnu 或者降级 JSON。                                                                              |

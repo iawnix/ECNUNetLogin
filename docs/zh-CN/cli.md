@@ -7,13 +7,10 @@
 | 子命令          | 作用                                                  |
 | --------------- | ----------------------------------------------------- |
 | `login`         | 拉取 challenge token、签名请求、提交登录              |
-| `auth`          | `login` 的别名                                        |
 | `logout`        | 同 `login` 流程，但 `action=logout`                   |
 | `check`         | 调用 `/cgi-bin/rad_user_info`，打印解析后的状态       |
-| `status`        | `check` 的别名                                        |
-| `banner`        | 打印 ASCII banner（搭配 `--json` 可作工具探测）       |
 | `config`        | 管理配置文件：`config init` / `config show` / `config path` |
-| `input-template`| 输出 `--in-json` 模板（`--action login\|auth\|logout\|check\|status`） |
+| `input-template`| 输出 `--in-json` 模板（`--action login\|logout\|check`） |
 
 `auth_ecnu --version` / `-V` 打印版本号。
 
@@ -67,7 +64,7 @@ auth_ecnu --in-json run.json
 - `--password PASS` / `-p` —— 在共享环境危险，会被 `ps` / shell
   历史看到，能避免就避免。
 - `--password-stdin` —— 从 stdin 读密码
-  （`echo $PASS | auth_ecnu auth -u USER --password-stdin`）。
+  （`echo $PASS | auth_ecnu login -u USER --password-stdin`）。
 - `--ask-password` —— 交互式输入（推荐）。
 
 ## 请求塑形
@@ -94,7 +91,7 @@ auth_ecnu --in-json run.json
 
 ```bash
 # 交互式登录，rich 输出
-auth_ecnu auth -u alice --ask-password
+auth_ecnu login -u alice --ask-password
 
 # 检查在线状态，JSON 输出
 auth_ecnu check --host 172.20.20.11 --json
@@ -103,10 +100,10 @@ auth_ecnu check --host 172.20.20.11 --json
 auth_ecnu logout -u alice --quiet
 
 # 只看签名后的请求，不提交
-auth_ecnu auth -u alice --ask-password --preview
+auth_ecnu login -u alice --ask-password --preview
 
 # 登录并立即验证，一个 JSON 文档全搞定
-auth_ecnu auth -u alice --ask-password --check-after --json
+auth_ecnu login -u alice --ask-password --check-after --json
 
 # 同上但所有参数来自 JSON 文件
 auth_ecnu --in-json ~/secure/auth.json
