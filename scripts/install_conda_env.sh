@@ -10,9 +10,9 @@ if ! command -v conda >/dev/null 2>&1; then
 fi
 
 if conda env list | awk '{print $1}' | grep -Fxq "${ENV_NAME}"; then
-  conda env update -n "${ENV_NAME}" -f "${ROOT_DIR}/environment.yml" --prune
+  conda env update -n "${ENV_NAME}" --file "${ROOT_DIR}/environment.yml" --prune
 else
-  conda env create -n "${ENV_NAME}" -f "${ROOT_DIR}/environment.yml"
+  conda env create -n "${ENV_NAME}" --file "${ROOT_DIR}/environment.yml"
 fi
 
 conda run -n "${ENV_NAME}" python -m pip install -e "${ROOT_DIR}"

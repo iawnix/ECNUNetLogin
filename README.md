@@ -37,7 +37,7 @@ auth_ecnu -h
 Use Anaconda Prompt or PowerShell with conda initialized:
 
 ```powershell
-conda env create -n auth-ecnu -f environment.yml
+conda env create -n auth-ecnu --file environment.yml
 conda activate auth-ecnu
 python -m pip install -e .
 auth_ecnu -h
@@ -46,7 +46,7 @@ auth_ecnu -h
 If the `auth-ecnu` environment already exists:
 
 ```powershell
-conda env update -n auth-ecnu -f environment.yml --prune
+conda env update -n auth-ecnu --file environment.yml --prune
 conda activate auth-ecnu
 python -m pip install -e .
 ```
