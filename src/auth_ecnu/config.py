@@ -1,9 +1,14 @@
-"""Compatibility loader for auth_client-style setting files.
+"""Loader for the auth_ecnu setting file.
 
 The default config location follows the XDG Base Directory specification on
-Linux/macOS and uses ``%APPDATA%`` on Windows. The legacy
-``~/.auth-setting`` location is still read as a fallback so existing users
-keep working without any migration step.
+Linux/macOS and uses ``%APPDATA%`` on Windows.
+
+**Security**: the setting file is for portal-side identifiers only —
+``host``, ``acid``, ``campus_postfix``, ``campus_url``. **Never** put a
+username or a password here. Unknown keys are silently ignored, so a
+legacy file containing ``username=…`` will not break but also will not
+populate any field; pass ``--username``/``-u`` (or use ``--in-json``)
+explicitly each time.
 """
 
 from __future__ import annotations
@@ -12,12 +17,8 @@ import dataclasses
 import os
 import sys
 from pathlib import Path
-from typing import Iterator
 
 from .errors import UsageError
-
-
-LEGACY_CONFIG_PATH = Path.home() / ".auth-setting"
 
 
 def default_config_dir() -> Path:
@@ -39,29 +40,12 @@ def default_config_path() -> Path:
     return default_config_dir() / "setting"
 
 
-def iter_default_config_paths() -> Iterator[Path]:
-    """Yield candidate default paths in priority order (XDG first, legacy last)."""
-    primary = default_config_path()
-    yield primary
-    if LEGACY_CONFIG_PATH != primary:
-        yield LEGACY_CONFIG_PATH
-
-
-def resolve_default_config_path() -> Path | None:
-    """Return the first existing default config path, or ``None``."""
-    for path in iter_default_config_paths():
-        if path.exists():
-            return path
-    return None
-
-
 @dataclasses.dataclass(frozen=True)
 class AuthSetting:
     host: str = ""
     acid: int | None = None
     campus_postfix: str = ""
     campus_url: str = ""
-    username: str = ""
 
 
 def parse_setting_text(text: str, source: str = "<setting>") -> AuthSetting:
@@ -87,35 +71,24 @@ def parse_setting_text(text: str, source: str = "<setting>") -> AuthSetting:
         except ValueError as exc:
             raise UsageError(f"invalid acid in {source}: {raw_acid!r}") from exc
 
+    # Unknown keys (e.g. legacy ``username``) are silently dropped — see
+    # the module docstring for why credentials must not live in this file.
     return AuthSetting(
         host=values.get("host", ""),
         acid=acid,
         campus_postfix=values.get("campus_postfix", ""),
         campus_url=values.get("campus_url", ""),
-        username=values.get("username", ""),
     )
 
 
 def load_auth_setting(path: str | Path | None) -> AuthSetting:
-    """Load an auth-setting file with transparent legacy fallback.
+    """Load an auth-setting file.
 
-    - ``None`` searches the XDG/AppData default then the legacy ``~/.auth-setting``.
-    - An explicit path is read when present; the legacy fallback only kicks in
-      if the caller asked for the new default path that happens to not exist
-      yet (so first-run users keep picking up their old file).
+    - ``None`` reads :func:`default_config_path` if it exists.
+    - An explicit path is read when present; missing paths silently
+      return defaults (matching the "no config, no problem" UX).
     """
-    if path is None:
-        found = resolve_default_config_path()
-        if found is None:
-            return AuthSetting()
-        return parse_setting_text(found.read_text(encoding="utf-8"), source=str(found))
-
-    config_path = Path(path).expanduser()
-    if config_path.exists():
-        return parse_setting_text(config_path.read_text(encoding="utf-8"), source=str(config_path))
-    if config_path == default_config_path() and LEGACY_CONFIG_PATH.exists():
-        return parse_setting_text(
-            LEGACY_CONFIG_PATH.read_text(encoding="utf-8"),
-            source=str(LEGACY_CONFIG_PATH),
-        )
-    return AuthSetting()
+    config_path = Path(path).expanduser() if path else default_config_path()
+    if not config_path.exists():
+        return AuthSetting()
+    return parse_setting_text(config_path.read_text(encoding="utf-8"), source=str(config_path))

@@ -195,7 +195,13 @@ def status_payload(status: OnlineStatus) -> dict[str, Any]:
     return online_status_to_dict(status)
 
 
-def render_status(status: OnlineStatus, output: str, command: str = "check") -> None:
+def render_status(
+    status: OnlineStatus,
+    output: str,
+    command: str = "check",
+    *,
+    host: str = "",
+) -> None:
     payload = status_payload(status)
     if output == "quiet":
         return
@@ -213,10 +219,11 @@ def render_status(status: OnlineStatus, output: str, command: str = "check") -> 
         return
 
     mark_style = HACKER_BORDER if status.online else HACKER_ALERT
+    subtitle = f"portal={host}" if host else "portal status"
     _section(
         console,
         "ECNU NET STATUS",
-        subtitle="rad_user_info",
+        subtitle=subtitle,
         mark_style=mark_style,
     )
     _print_rows(

@@ -3,6 +3,57 @@
 Notable changes per release. Schema follows [Keep a Changelog](https://keepachangelog.com/)
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-06-30
+
+### Added
+- **`auth_ecnu config init / show / path`** subcommands. `init`
+  interactively (or non-interactively with `--yes`) writes the
+  auth-setting file without rerunning the installer. `show` prints
+  the parsed settings (rich/json/quiet, no credentials). `path`
+  prints the resolved config file path.
+- **`auth_ecnu input-template --action ACTION`** prints a clean
+  `--in-json` template document for the requested action — makes the
+  `--in-json` workflow discoverable from the CLI.
+- **Chinese documentation** under `docs/zh-CN/`, with a top-level
+  `README.zh-CN.md` landing page. English docs link to their Chinese
+  counterparts at the top.
+
+## [0.3.0] — 2026-06-30
+
+### Added
+- **Unified installer / uninstaller**: `scripts/setup.sh install`,
+  `uninstall`, `status` — one entry point, choice of `pipx` / `venv` /
+  `user`. Aborts with a clear message if the chosen method's
+  prerequisite is missing rather than silently falling back. Writes
+  the chosen layout to `~/.config/auth_ecnu/install-state` so
+  uninstall reverses exactly what install did.
+- **Initial config is written at install time** (`mode 600`), not
+  expected to exist by chance.
+- **`--in-json FILE`** — supply run parameters from a JSON file
+  (`schema_version: 1`). Two call styles:
+  `auth_ecnu --in-json run.json` (dispatch via `action` in the JSON)
+  and `auth_ecnu auth --in-json run.json` (subcommand fixed on the
+  CLI). Precedence: CLI explicit > JSON > config > defaults.
+- **Status panel subtitle** now shows `portal=<host>` instead of the
+  jargon `rad_user_info`.
+- **`docs/` directory** with topic-specific docs:
+  `install.md`, `cli.md`, `scripting.md`, `config.md`,
+  `troubleshooting.md`. README is now a ~50-line landing page.
+
+### Changed
+- **README** slimmed from ~400 lines to ~50; detailed material moved
+  to `docs/`.
+
+### Removed
+- **Legacy `~/.auth-setting` fallback.** This path is no longer read
+  at all; migrate to `~/.config/auth_ecnu/setting` (the installer
+  helps).
+- **`username` config key.** It is silently ignored if present.
+  Credentials must never be in the config file. Pass `-u` at runtime
+  or use `--in-json` with a file you control (`mode 600`).
+- **`scripts/install.sh` and `scripts/uninstall.sh`** — replaced by
+  the unified `scripts/setup.sh`.
+
 ## [0.2.0] — 2026-06-30
 
 ### Added

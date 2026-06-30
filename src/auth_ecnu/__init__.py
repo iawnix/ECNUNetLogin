@@ -1,6 +1,6 @@
 """ECNU/SRun auth_client Python refactor."""
 
-__version__ = "0.2.0"
+__version__ = "0.4.0"
 
 from .client import SrunClient, auto_fetch_acid, auto_fetch_token, check_online_status, decode_jsonp_or_json, get_text
 from .config import AuthSetting, load_auth_setting, parse_setting_text
