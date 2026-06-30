@@ -9,7 +9,7 @@ import urllib.request
 from typing import Any, Dict, Mapping
 
 from .constants import DEFAULT_TIMEOUT, DEFAULT_USER_AGENT
-from .errors import CliError
+from .errors import NetworkError, PortalError, UsageError
 from .models import AuthParams, AuthResult, OnlineStatus, SrunUrlProvider
 from .protocol import (
     add_auth_callback,
@@ -31,7 +31,7 @@ class SrunClient:
         user_agent: str = DEFAULT_USER_AGENT,
     ) -> None:
         if timeout <= 0:
-            raise CliError("--timeout must be positive")
+            raise UsageError("--timeout must be positive")
         self.provider = provider
         self.timeout = timeout
         self.debug = debug
@@ -49,7 +49,7 @@ class SrunClient:
         data = decode_jsonp_or_json(body)
         token = data.get("challenge")
         if not isinstance(token, str) or not token:
-            raise CliError(f"challenge token not found in response: {body!r}")
+            raise PortalError(f"challenge token not found in response: {body!r}")
         return token
 
     def build_auth_request(
@@ -117,7 +117,7 @@ def get_text(
             return resp.read().decode("utf-8", errors="replace")
     except urllib.error.URLError as exc:
         reason = getattr(exc, "reason", exc)
-        raise CliError(f"request failed for {url}: {reason}") from exc
+        raise NetworkError(f"request failed for {url}: {reason}") from exc
 
 
 def decode_jsonp_or_json(text: str) -> Dict[str, Any]:
@@ -125,9 +125,12 @@ def decode_jsonp_or_json(text: str) -> Dict[str, Any]:
         payload = find_json(text)
     except ValueError:
         payload = text
-    data = json.loads(payload)
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise PortalError(f"invalid JSON response: {text!r}") from exc
     if not isinstance(data, dict):
-        raise CliError(f"expected JSON object, got {type(data).__name__}")
+        raise PortalError(f"expected JSON object, got {type(data).__name__}")
     return data
 
 

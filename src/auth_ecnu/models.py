@@ -6,8 +6,6 @@ import dataclasses
 import urllib.parse
 from typing import Dict
 
-from .errors import CliError
-
 
 @dataclasses.dataclass(frozen=True)
 class SrunUrlProvider:
@@ -30,9 +28,9 @@ class SrunUrlProvider:
     def from_host(cls, host: str) -> "SrunUrlProvider":
         parsed = urllib.parse.urlparse(host if "://" in host else f"http://{host}")
         if not parsed.hostname:
-            raise CliError(f"invalid host: {host!r}")
+            raise ValueError(f"invalid host: {host!r}")
         if parsed.scheme not in {"http", "https"}:
-            raise CliError(f"unsupported URL scheme: {parsed.scheme!r}")
+            raise ValueError(f"unsupported URL scheme: {parsed.scheme!r}")
         return cls(protocol=parsed.scheme or "http", host=parsed.netloc)
 
 

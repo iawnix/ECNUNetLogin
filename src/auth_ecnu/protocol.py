@@ -16,7 +16,7 @@ from .constants import (
     PASSWORD_PREFIX,
     UINT32_MASK,
 )
-from .errors import CliError
+from .errors import PortalError
 from .models import AuthParams, OnlineStatus
 
 
@@ -201,7 +201,7 @@ def add_auth_callback(params: Mapping[str, str]) -> Dict[str, str]:
 def find_acid(html: str) -> int:
     match = re.search(r"/index_([0-9]+)\.html", html)
     if not match:
-        raise CliError("acid not found in portal index page")
+        raise PortalError("acid not found in portal index page")
     return int(match.group(1), 10)
 
 

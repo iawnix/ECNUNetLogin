@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import sys
 from typing import Any, Mapping
 
+from . import __version__
+from .constants import JSON_SCHEMA_VERSION
+from .errors import AuthEcnuError
 from .models import OnlineStatus
 from .protocol import online_status_to_dict, query_string
 
@@ -30,8 +34,50 @@ HACKER_ALERT = "bold red"
 HACKER_PANEL = "black on green"
 
 
+def build_meta(command: str = "") -> dict[str, Any]:
+    """Return the meta block stamped on every JSON document.
+
+    Downstream scripts should branch on ``schema_version`` if they need
+    to support multiple versions of this tool.
+    """
+    return {
+        "tool": "auth_ecnu",
+        "version": __version__,
+        "command": command,
+        "schema_version": JSON_SCHEMA_VERSION,
+    }
+
+
+def _emit_json(payload: dict[str, Any], *, stream: Any = None) -> None:
+    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    if stream is None:
+        print(text)
+    else:
+        print(text, file=stream)
+
+
 def print_json(value: Any) -> None:
+    """Legacy helper: emit a JSON document to stdout."""
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def print_data(data: dict[str, Any], command: str) -> None:
+    payload = dict(data)
+    payload["meta"] = build_meta(command)
+    _emit_json(payload)
+
+
+def print_error(error: BaseException, command: str = "") -> None:
+    """Emit a structured JSON error envelope to stderr."""
+    code = getattr(error, "code", "error")
+    payload = {
+        "error": {
+            "code": code,
+            "message": str(error),
+        },
+        "meta": build_meta(command),
+    }
+    _emit_json(payload, stream=sys.stderr)
 
 
 def rich_available() -> bool:
@@ -63,25 +109,14 @@ def _jsonish(value: Any) -> str:
     return str(value)
 
 
-def _status_ip(status: OnlineStatus) -> str:
-    fields = status.raw.split(",") if status.raw else []
-    if len(fields) > 8 and fields[8]:
-        return fields[8]
-    return ""
-
-
 def status_payload(status: OnlineStatus) -> dict[str, Any]:
-    payload = online_status_to_dict(status)
-    ip = _status_ip(status)
-    if ip:
-        payload["ip"] = ip
-    return payload
+    return online_status_to_dict(status)
 
 
-def render_status(status: OnlineStatus, output: str) -> None:
+def render_status(status: OnlineStatus, output: str, command: str = "check") -> None:
     payload = status_payload(status)
     if output == "json":
-        print_json(payload)
+        print_data(payload, command)
         return
 
     console = _console()
@@ -93,7 +128,7 @@ def render_status(status: OnlineStatus, output: str) -> None:
             print(f"IP: {payload['ip']}")
         return
 
-    table = Table(box=box.SQUARE, show_header=False, pad_edge=True)
+    table = Table(box=box.HEAVY, show_header=False, pad_edge=True)
     table.add_column("FIELD", style=HACKER_FIELD, no_wrap=True)
     table.add_column("VALUE", style=HACKER_VALUE)
     table.add_row("STATE", _state_label(status.online))
@@ -117,10 +152,10 @@ def auth_response_payload(body: str, decoder: Any) -> dict[str, Any]:
     return decoded
 
 
-def render_auth_response(title: str, body: str, output: str, decoder: Any) -> None:
+def render_auth_response(title: str, body: str, output: str, decoder: Any, command: str = "") -> None:
     payload = auth_response_payload(body, decoder)
     if output == "json":
-        print_json(payload)
+        print_data(payload, command)
         return
 
     console = _console()
@@ -130,7 +165,7 @@ def render_auth_response(title: str, body: str, output: str, decoder: Any) -> No
             print(f"{key}: {value}")
         return
 
-    table = Table(box=box.SQUARE, show_header=False, pad_edge=True)
+    table = Table(box=box.HEAVY, show_header=False, pad_edge=True)
     table.add_column("FIELD", style=HACKER_FIELD, no_wrap=True)
     table.add_column("VALUE", style=HACKER_VALUE)
     for key, value in payload.items():
@@ -152,10 +187,10 @@ def request_payload(request: Mapping[str, str]) -> dict[str, Any]:
     }
 
 
-def render_request(title: str, request: Mapping[str, str], output: str) -> None:
+def render_request(title: str, request: Mapping[str, str], output: str, command: str = "") -> None:
     payload = request_payload(request)
     if output == "json":
-        print_json(payload)
+        print_data(payload, command)
         return
 
     console = _console()
@@ -170,7 +205,7 @@ def render_request(title: str, request: Mapping[str, str], output: str) -> None:
         print(payload["query"])
         return
 
-    table = Table(box=box.SQUARE, show_header=False, pad_edge=True)
+    table = Table(box=box.HEAVY, show_header=False, pad_edge=True)
     table.add_column("FIELD", style=HACKER_FIELD, no_wrap=True)
     table.add_column("VALUE", style=HACKER_VALUE)
     table.add_row("ACTION", _value(request.get("action")))
@@ -193,3 +228,12 @@ def render_request(title: str, request: Mapping[str, str], output: str) -> None:
             border_style=HACKER_DIM,
         )
     )
+
+
+def render_error(error: AuthEcnuError, output: str, command: str = "") -> None:
+    """Top-level error rendering. JSON mode emits an error envelope;
+    rich/plain mode prints a single human-readable line to stderr."""
+    if output == "json":
+        print_error(error, command)
+        return
+    print(f"error: {error}", file=sys.stderr)

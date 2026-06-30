@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-from .errors import CliError
+from .errors import UsageError
 
 
 DEFAULT_CONFIG_PATH = Path.home() / ".auth-setting"
@@ -17,6 +17,7 @@ class AuthSetting:
     acid: int | None = None
     campus_postfix: str = ""
     campus_url: str = ""
+    username: str = ""
 
 
 def parse_setting_text(text: str, source: str = "<setting>") -> AuthSetting:
@@ -26,7 +27,7 @@ def parse_setting_text(text: str, source: str = "<setting>") -> AuthSetting:
         if not line or line.startswith("#"):
             continue
         if "=" not in line:
-            raise CliError(f"invalid config line {source}:{line_no}: {raw_line!r}")
+            raise UsageError(f"invalid config line {source}:{line_no}: {raw_line!r}")
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip()
@@ -40,13 +41,14 @@ def parse_setting_text(text: str, source: str = "<setting>") -> AuthSetting:
         try:
             acid = int(raw_acid, 10)
         except ValueError as exc:
-            raise CliError(f"invalid acid in {source}: {raw_acid!r}") from exc
+            raise UsageError(f"invalid acid in {source}: {raw_acid!r}") from exc
 
     return AuthSetting(
         host=values.get("host", ""),
         acid=acid,
         campus_postfix=values.get("campus_postfix", ""),
         campus_url=values.get("campus_url", ""),
+        username=values.get("username", ""),
     )
 
 

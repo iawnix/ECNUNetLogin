@@ -2,57 +2,80 @@
 
 ECNUNetLogin is a Python refactor of the existing ECNU `auth_client`.
 
-It provides a small command-line tool and importable Python modules for ECNU/SRun
-campus network authentication. The tool can build signed login/logout requests,
-submit them to the campus portal, and check the current online status.
+It provides a small command-line tool and importable Python modules for
+ECNU/SRun campus network authentication. The tool can build signed
+login/logout requests, submit them to the campus portal, and check the
+current online status. Output is human-friendly Rich rendering by
+default and switches to a stable JSON envelope for scripts.
+
+The only runtime dependency is [`rich`](https://github.com/Textualize/rich);
+the package targets Python 3.10+.
 
 ## Install
 
-The Python package works on Linux, macOS, and Windows.
+ECNUNetLogin no longer requires conda. Pick the path that matches how
+you use Python:
 
-### Linux/macOS
-
-Create or update the conda environment and install the local package in editable mode:
+### pipx (recommended for end users)
 
 ```bash
-./scripts/install_conda_env.sh
+pipx install /path/to/ECNUNetLogin
+auth_ecnu --version
 ```
 
-The installer creates the `auth-ecnu` conda environment by default. Override the
-environment name with:
+`pipx` keeps the CLI isolated in its own virtualenv and exposes
+`auth_ecnu` globally. To upgrade, run `pipx reinstall auth-ecnu`. To
+remove, `pipx uninstall auth-ecnu`.
+
+### Project venv (recommended for development)
 
 ```bash
-AUTH_ECNU_ENV=my-auth-env ./scripts/install_conda_env.sh
+./scripts/install.sh
+source .venv/bin/activate
+auth_ecnu --version
 ```
 
-After installation:
+Override the venv location or interpreter:
 
 ```bash
-conda activate auth-ecnu
-auth_ecnu -h
+AUTH_ECNU_VENV=/opt/auth ./scripts/install.sh
+AUTH_ECNU_PYTHON=python3.11 ./scripts/install.sh
+```
+
+### Make targets
+
+```bash
+make install     # creates .venv and installs auth_ecnu editable
+make test        # offline unit tests
+make uninstall   # remove .venv
+make purge       # remove .venv and ~/.auth-setting
+make version     # print the installed version
+make help        # list every target
+```
+
+### Uninstall
+
+```bash
+./scripts/uninstall.sh           # remove the project .venv
+./scripts/uninstall.sh --purge   # also remove ~/.auth-setting
+```
+
+If installed via pipx instead:
+
+```bash
+pipx uninstall auth-ecnu
 ```
 
 ### Windows
 
-Use Anaconda Prompt or PowerShell with conda initialized:
+PowerShell/Command Prompt:
 
 ```powershell
-conda env create -n auth-ecnu --file environment.yml
-conda activate auth-ecnu
+py -m venv .venv
+.venv\Scripts\Activate.ps1
 python -m pip install -e .
-auth_ecnu -h
+auth_ecnu --version
 ```
-
-If the `auth-ecnu` environment already exists:
-
-```powershell
-conda env update -n auth-ecnu --file environment.yml --prune
-conda activate auth-ecnu
-python -m pip install -e .
-```
-
-The Bash installer under `scripts/` is for Linux/macOS shells. On Windows, use
-the commands above unless you are running Git Bash or WSL.
 
 ## Commands
 
@@ -93,9 +116,11 @@ Subcommands:
 - `auth`: alias for `login`.
 - `logout`: fetch portal parameters, build the signed request, and submit logout.
 - `check`: query `/cgi-bin/rad_user_info`.
+- `status`: alias for `check`.
 
 Useful options:
 
+- `--version` / `-V` prints the tool version.
 - `--preview` on `auth`/`login`/`logout` prints the signed request without submitting it.
 - `--json` is a shortcut for `--output json`.
 - `--output rich|json` switches between user-friendly rendering and machine-readable JSON.
@@ -104,10 +129,25 @@ Useful options:
 
 ## JSON Output
 
-JSON mode is for scripts, monitoring jobs, and other programs. It writes one
-complete JSON document to stdout for each command invocation. The tool does not
-read command arguments from a JSON file; use command-line options or the
-`~/.auth-setting` config file for inputs.
+JSON mode is for scripts, monitoring jobs, and other programs. Each
+invocation writes exactly one JSON document. Success documents land on
+stdout; errors land on stderr (see below).
+
+Every JSON document carries a `meta` block so downstream scripts can
+branch on a single, stable field:
+
+```json
+"meta": {
+  "tool": "auth_ecnu",
+  "version": "0.2.0",
+  "command": "check",
+  "schema_version": 1
+}
+```
+
+`schema_version` is the contract this README documents. Future schema
+changes will bump it; consumer scripts should refuse unknown versions
+rather than silently misinterpret fields.
 
 Save the current online status to a JSON file:
 
@@ -129,15 +169,21 @@ Typical `check --json` output:
 ```json
 {
   "ip": "198.51.100.10",
+  "meta": {
+    "command": "check",
+    "schema_version": 1,
+    "tool": "auth_ecnu",
+    "version": "0.2.0"
+  },
   "online": true,
   "raw": "USER,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "USER"
 }
 ```
 
-Use `online`, `username`, and `ip` for normal automation. `raw` is the original
-comma-separated portal response and is kept for debugging or advanced SRun
-compatibility checks.
+Use `online`, `username`, and `ip` for normal automation. `raw` is the
+original comma-separated portal response and is kept for debugging or
+advanced SRun compatibility checks.
 
 Save a login result and immediate status check:
 
@@ -146,10 +192,16 @@ auth_ecnu auth --username USER --ask-password --check-after --json > login-resul
 ```
 
 When `--check-after` is used with JSON mode, the output contains both the
-decoded portal response and the follow-up status:
+decoded portal response and the follow-up status, plus the `meta` block:
 
 ```json
 {
+  "meta": {
+    "command": "auth",
+    "schema_version": 1,
+    "tool": "auth_ecnu",
+    "version": "0.2.0"
+  },
   "response": {
     "error": "ok",
     "suc_msg": "login_ok"
@@ -172,10 +224,11 @@ Preview mode can save the signed request without submitting it:
 auth_ecnu auth --username USER --ask-password --preview --json > request-preview.json
 ```
 
-Typical preview output:
+Typical preview output (truncated):
 
 ```json
 {
+  "meta": {"command": "auth", "schema_version": 1, "tool": "auth_ecnu", "version": "0.2.0"},
   "query": "callback=...&action=login&username=USER&ac_id=1&...",
   "request": {
     "ac_id": "1",
@@ -193,6 +246,38 @@ the password and temporary challenge token. Do not commit, publish, or share
 `request-preview.json`, `login-result.json`, or any real output captured from a
 login session.
 
+### Errors and exit codes
+
+When a command fails in JSON mode, the tool emits a structured envelope
+to **stderr** (not stdout) and exits with a non-zero code:
+
+```json
+{
+  "error": {
+    "code": "network_error",
+    "message": "request failed for http://10.0.0.1/cgi-bin/get_challenge: timed out"
+  },
+  "meta": {
+    "command": "auth",
+    "schema_version": 1,
+    "tool": "auth_ecnu",
+    "version": "0.2.0"
+  }
+}
+```
+
+Exit codes:
+
+| Code | Meaning                                                   |
+| ---- | --------------------------------------------------------- |
+| 0    | success                                                   |
+| 2    | usage error: missing/invalid CLI input or bad config file |
+| 3    | network error: portal unreachable, timeout, DNS, TLS      |
+| 4    | portal error: portal reachable but response malformed     |
+
+`error.code` matches one of `usage_error`, `network_error`, `portal_error`.
+Scripts should branch on these rather than parsing `error.message`.
+
 ## Config File
 
 By default, ECNUNetLogin reads `~/.auth-setting` if it exists:
@@ -202,6 +287,7 @@ campus_url=""
 acid="1"
 host="172.20.20.11"
 campus_postfix=""
+username=""
 ```
 
 Use another file with `--config PATH`.
@@ -214,6 +300,9 @@ signed login/logout requests. For the shown ECNU portal, it is `1`. In normal
 host mode the tool can auto-detect it from the portal page, but keeping it in
 the config file avoids an extra lookup and matches the old `auth_client`
 setting format.
+
+`username` is optional. When set, `auth`/`login`/`logout` can be invoked
+without `--username` and will pick it up from the config file.
 
 The SRun `token` is a temporary challenge returned by the portal's
 `/cgi-bin/get_challenge` endpoint. Normal `auth`, `login`, and `logout`
@@ -230,18 +319,36 @@ PYTHONPATH=src python3 -m auth_ecnu -h
 Run tests:
 
 ```bash
-PYTHONPATH=src python3 -m unittest tests/test_auth_ecnu.py
+make test
+# or:
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+```
+
+Byte-compile to catch syntax errors quickly:
+
+```bash
+make lint
 ```
 
 ## Layout
 
-- `src/auth_ecnu/protocol.py`: request signing and encoding.
+- `src/auth_ecnu/protocol.py`: request signing and encoding (pure functions).
 - `src/auth_ecnu/client.py`: portal HTTP client.
 - `src/auth_ecnu/cli.py`: command-line interface.
 - `src/auth_ecnu/models.py`: typed request/status models.
-- `tests/test_auth_ecnu.py`: offline tests.
+- `src/auth_ecnu/render.py`: Rich rendering + JSON envelope.
+- `src/auth_ecnu/errors.py`: error hierarchy and exit-code mapping.
+- `src/auth_ecnu/config.py`: legacy `auth-setting` parser.
+- `src/auth_ecnu/constants.py`: SRun protocol constants and `JSON_SCHEMA_VERSION`.
+- `tests/test_auth_ecnu.py`: offline unit tests.
+- `scripts/install.sh`, `scripts/uninstall.sh`: venv-based install/uninstall.
+- `Makefile`: convenience targets.
 
-## Security
+## Security & responsible use
 
-Do not commit credentials, portal secrets, private tokens, or local runtime state.
-Use `--ask-password` or `--password-stdin` for real login attempts.
+- Do not commit credentials, portal secrets, private tokens, or local runtime state.
+- Use `--ask-password` or `--password-stdin` for real login attempts so the
+  password never enters shell history.
+- This tool is intended for authenticating your **own** ECNU campus
+  account. Do not use it to impersonate other accounts, bypass portal
+  policy, or perform load testing against the portal.
