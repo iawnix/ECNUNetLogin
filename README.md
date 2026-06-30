@@ -8,6 +8,10 @@ submit them to the campus portal, and check the current online status.
 
 ## Install
 
+The Python package works on Linux, macOS, and Windows.
+
+### Linux/macOS
+
 Create or update the conda environment and install the local package in editable mode:
 
 ```bash
@@ -27,6 +31,28 @@ After installation:
 conda activate auth-ecnu
 auth_ecnu -h
 ```
+
+### Windows
+
+Use Anaconda Prompt or PowerShell with conda initialized:
+
+```powershell
+conda env create -n auth-ecnu -f environment.yml
+conda activate auth-ecnu
+python -m pip install -e .
+auth_ecnu -h
+```
+
+If the `auth-ecnu` environment already exists:
+
+```powershell
+conda env update -n auth-ecnu -f environment.yml --prune
+conda activate auth-ecnu
+python -m pip install -e .
+```
+
+The Bash installer under `scripts/` is for Linux/macOS shells. On Windows, use
+the commands above unless you are running Git Bash or WSL.
 
 ## Commands
 
@@ -88,6 +114,9 @@ campus_postfix=""
 ```
 
 Use another file with `--config PATH`.
+
+On Windows, `~/.auth-setting` means the file in the current user's home
+directory, for example `C:\Users\<User>\.auth-setting`.
 
 `acid` is the SRun `ac_id`: the access-controller or portal entry ID used in
 signed login/logout requests. For the shown ECNU portal, it is `1`. In normal
