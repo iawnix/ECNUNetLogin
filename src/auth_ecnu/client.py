@@ -82,11 +82,7 @@ class SrunClient:
         return AuthResult(request=dict(request), body=body)
 
     def check_online_status(self) -> OnlineStatus:
-        body = self.get_text(self.provider.check()).strip()
-        if "not_online_error" in body:
-            return OnlineStatus(online=False, raw=body)
-        username = body.split(",", 1)[0].strip()
-        return OnlineStatus(online=bool(username), username=username, raw=body)
+        return OnlineStatus.from_portal_body(self.get_text(self.provider.check()))
 
     def get_text(self, url: str, params: Mapping[str, str] | None = None) -> str:
         return get_text(

@@ -7,6 +7,7 @@ name = "auth-ecnu"
 version = "0.2.0"
 description = "Python refactor of the existing ECNU auth_client."
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [
   { name = "iaw and Codex" }

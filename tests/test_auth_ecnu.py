@@ -258,6 +258,74 @@ class AuthEcnuTests(unittest.TestCase):
                 pass
         self.assertEqual(captured.getvalue(), "")
 
+    def test_quiet_mode_suppresses_all_output(self) -> None:
+        class FakeClient:
+            def check_online_status(self) -> OnlineStatus:
+                return OnlineStatus(
+                    online=True,
+                    username="alice",
+                    raw="alice,1,2,0,0,0,0,0,198.51.100.10,0",
+                )
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = main(["check", "--host", "portal.example", "--quiet"])
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_quiet_mode_swallows_error_output_but_reports_via_exit_code(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = main(["check", "--config", "/nonexistent/path", "--quiet"])
+        self.assertEqual(rc, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_quiet_mode_disables_debug_output_at_client_boundary(self) -> None:
+        captured_debug: list[bool] = []
+
+        class FakeSrunClient:
+            def __init__(self, provider, *, timeout, debug):
+                captured_debug.append(debug)
+
+            def check_online_status(self) -> OnlineStatus:
+                return OnlineStatus(online=True, username="alice")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("auth_ecnu.cli.SrunClient", FakeSrunClient):
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = main(["check", "--host", "portal.example", "--quiet", "--debug"])
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(captured_debug, [False])
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_online_status_derives_ip_from_raw(self) -> None:
+        # Direct construction picks up ip via __post_init__.
+        status = OnlineStatus(
+            online=True,
+            username="alice",
+            raw="alice,1,2,0,0,0,0,0,198.51.100.10,0",
+        )
+        self.assertEqual(status.ip, "198.51.100.10")
+
+        # from_portal_body parses everything from the wire body.
+        parsed = OnlineStatus.from_portal_body("alice,1,2,0,0,0,0,0,198.51.100.10,0")
+        self.assertTrue(parsed.online)
+        self.assertEqual(parsed.username, "alice")
+        self.assertEqual(parsed.ip, "198.51.100.10")
+
+        offline = OnlineStatus.from_portal_body("not_online_error\n")
+        self.assertFalse(offline.online)
+        self.assertEqual(offline.ip, "")
+
     def test_render_auth_response_marks_decode_failure(self) -> None:
         from auth_ecnu.client import decode_jsonp_or_json
         from auth_ecnu.render import auth_response_payload, _decode_failed

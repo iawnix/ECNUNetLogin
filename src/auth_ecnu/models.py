@@ -61,6 +61,30 @@ class OnlineStatus:
     online: bool
     username: str = ""
     raw: str = ""
+    ip: str = ""
+
+    def __post_init__(self) -> None:
+        # If the caller only knew the raw body, derive ip from field 8.
+        # This keeps direct ``OnlineStatus(raw=...)`` construction usable.
+        if not self.ip and self.raw:
+            fields = self.raw.split(",")
+            if len(fields) > 8 and fields[8]:
+                object.__setattr__(self, "ip", fields[8].strip())
+
+    @classmethod
+    def from_portal_body(cls, body: str) -> "OnlineStatus":
+        """Parse a ``/cgi-bin/rad_user_info`` body.
+
+        The portal returns a comma-separated record like
+        ``USER,1,2,0,0,0,0,0,IP,0`` when authenticated, and the literal
+        ``not_online_error`` (possibly followed by extra data) otherwise.
+        """
+        body = body.strip()
+        if "not_online_error" in body:
+            return cls(online=False, raw=body)
+        fields = body.split(",")
+        username = fields[0].strip() if fields else ""
+        return cls(online=bool(username), username=username, raw=body)
 
 
 @dataclasses.dataclass(frozen=True)

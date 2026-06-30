@@ -1,4 +1,29 @@
-"""Pure SRun/SRBX1 request construction helpers."""
+"""Pure SRun/SRBX1 request construction helpers.
+
+The signing scheme used by ECNU's SRun portal is non-standard. The
+normative implementation notes live in ``docs/protocol.md`` with a
+worked example you can diff against.
+
+Two SRun-specific behaviours live in this module:
+
+1. ``quirk_base64_encode`` is a SRun-specific base64 dialect that uses
+   the custom 64-character alphabet ``CUSTOM_B64_ALPHABET`` from
+   :mod:`auth_ecnu.constants`. Its padding rule compares total bit-count
+   of consumed input against the running output bit position rather than
+   the input length in bytes; that is why
+   ``i * 8 + j * 6 <= len(data) * 8`` decides whether to emit a
+   character or a ``=`` pad.
+2. ``xencode`` is a tiny XXTEA-flavoured block cipher (the SRun
+   ``info`` field is encoded with the challenge token as the key and
+   then base64-mangled). The 32-bit arithmetic is masked with
+   ``UINT32_MASK`` so Python's arbitrary-precision integers behave like
+   unsigned 32-bit words.
+
+If you are touching either function and the resulting ``info`` /
+``chksum`` field stops matching what the portal accepts, the failure is
+almost certainly here. Diff against the worked example in
+``docs/protocol.md`` before changing anything else.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +50,7 @@ def sha1sum(data: str) -> str:
 
 
 def quirk_base64_encode(data: bytes) -> str:
+    """SRun's variant of base64 — see module docstring for background."""
     out_len = ((len(data) + 2) // 3) * 4
     out = ["="] * out_len
     pos = 0
@@ -36,6 +62,9 @@ def quirk_base64_encode(data: bytes) -> str:
         value = (b0 << 16) | (b1 << 8) | b2
 
         for j in range(4):
+            # Emit a real character only while the corresponding 6-bit
+            # window still falls inside the input — otherwise emit '=' pad.
+            # Keep the SRun bit-count padding rule intact.
             if i * 8 + j * 6 <= len(data) * 8:
                 out[pos] = CUSTOM_B64_ALPHABET[(value >> (6 * (3 - j))) & 0x3F]
             else:
@@ -85,6 +114,14 @@ def _from_uint32_words(words: Iterable[int], include_length: bool) -> bytes | No
 
 
 def xencode(data: str, key: str) -> bytes:
+    """SRun's XXTEA-flavoured encoder — see module docstring for background.
+
+    ``data`` is split into 32-bit little-endian words with the input
+    length tail-appended; ``key`` is split the same way but without the
+    length suffix and is padded to at least four words. The mixing
+    schedule (``0x9E3779B9`` Delta, ``6 + 52 / n`` rounds, key-indexed
+    XOR) mirrors XXTEA; ``UINT32_MASK`` keeps the arithmetic 32-bit.
+    """
     if not data:
         return b""
 
@@ -222,7 +259,6 @@ def online_status_to_dict(status: OnlineStatus) -> Dict[str, object]:
         "username": status.username,
         "raw": status.raw,
     }
-    fields = status.raw.split(",") if status.raw else []
-    if len(fields) > 8 and fields[8]:
-        payload["ip"] = fields[8]
+    if status.ip:
+        payload["ip"] = status.ip
     return payload

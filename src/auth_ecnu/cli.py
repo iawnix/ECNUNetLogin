@@ -87,7 +87,7 @@ def make_client(args: argparse.Namespace) -> SrunClient:
     return SrunClient(
         make_provider(args),
         timeout=getattr(args, "timeout", DEFAULT_TIMEOUT),
-        debug=getattr(args, "debug", False),
+        debug=getattr(args, "debug", False) and getattr(args, "output", "rich") != "quiet",
     )
 
 
@@ -234,9 +234,9 @@ def add_password_args(parser: argparse.ArgumentParser) -> None:
 def add_output_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--output",
-        choices=("rich", "json"),
+        choices=("rich", "json", "quiet"),
         default="rich",
-        help="render human-friendly rich output or machine-readable JSON",
+        help="rich (human), json (machine), or quiet (exit code only)",
     )
     parser.add_argument(
         "--json",
@@ -244,6 +244,14 @@ def add_output_args(parser: argparse.ArgumentParser) -> None:
         action="store_const",
         const="json",
         help="shortcut for --output json",
+    )
+    parser.add_argument(
+        "--quiet",
+        "-q",
+        dest="output",
+        action="store_const",
+        const="quiet",
+        help="suppress stdout and stderr; convey result via exit code only",
     )
 
 

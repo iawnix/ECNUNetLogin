@@ -131,7 +131,8 @@ Useful options:
 - `--version` / `-V` prints the tool version.
 - `--preview` on `auth`/`login`/`logout` prints the signed request without submitting it.
 - `--json` is a shortcut for `--output json`.
-- `--output rich|json` switches between user-friendly rendering and machine-readable JSON.
+- `--quiet` / `-q` is a shortcut for `--output quiet` (no stdout/stderr; result via exit code only).
+- `--output rich|json|quiet` switches between user-friendly rendering, machine-readable JSON, and silent mode.
 - `--password-stdin` and `--ask-password` avoid putting the password directly in shell history.
 - `--campus-postfix` appends an account suffix when needed.
 
@@ -364,6 +365,38 @@ make lint
 - `tests/test_auth_ecnu.py`: offline unit tests.
 - `scripts/install.sh`, `scripts/uninstall.sh`: venv-based install/uninstall.
 - `Makefile`: convenience targets.
+
+## Troubleshooting
+
+| Symptom                                                                | Cause / fix                                                                                                                                                  |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--host is required` (exit `2`)                                        | No host on the command line and no config file. Pass `--host` or write `host="..."` to `~/.config/auth_ecnu/setting`.                                        |
+| `acid not found in portal index page` (exit `4`)                       | The portal's index HTML did not contain the expected `/index_<acid>.html` link. Set `acid` in the config file or pass `--acid` to skip the auto-detect step. |
+| `challenge token not found in response: ...` (exit `4`)                | `/cgi-bin/get_challenge` returned an unexpected payload. Re-run with `--debug` to dump the actual response; the portal may have been updated.                |
+| `request failed for http://...: timed out` (exit `3`)                  | Portal unreachable. Check you are on the campus network or the right VPN; raise `--timeout`.                                                                 |
+| `invalid host: '...'` / `unsupported URL scheme: '...'` (exit `2`)     | The `host` argument did not parse as a valid hostname or used a scheme other than `http`/`https`.                                                            |
+| `password is required for login` (exit `2`)                            | Combine `--username` with one of `--password`, `--password-stdin`, or `--ask-password`.                                                                      |
+| Login looks successful but `check` says offline                        | Portal sometimes accepts a login that the access controller then drops. Prefer `auth --check-after --json` and read `status.online`.                         |
+| Rich output looks like raw ANSI codes (`\\x1b[...`)                    | Your terminal does not support 256-color. Pipe through `less -R`, or use `--json` / `--quiet` for non-interactive shells.                                    |
+| `command not found: auth_ecnu` after `make install`                    | Either activate the venv (`source .venv/bin/activate`) or call the entry point directly: `.venv/bin/auth_ecnu`.                                              |
+
+Run any failing command with `--debug` to log each outbound URL to
+stderr; that almost always pinpoints which step is misbehaving.
+
+## Protocol
+
+The SRun `srun_bx1` wire format (URLs, `info` encoding, XEncode,
+checksum composition, worked example) is documented in
+[`docs/protocol.md`](docs/protocol.md). Read it before changing
+anything in `src/auth_ecnu/protocol.py`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the per-release diff.
 
 ## Security & responsible use
 
