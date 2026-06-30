@@ -217,8 +217,12 @@ def query_string(params: Mapping[str, str]) -> str:
 
 
 def online_status_to_dict(status: OnlineStatus) -> Dict[str, object]:
-    return {
+    payload: Dict[str, object] = {
         "online": status.online,
         "username": status.username,
         "raw": status.raw,
     }
+    fields = status.raw.split(",") if status.raw else []
+    if len(fields) > 8 and fields[8]:
+        payload["ip"] = fields[8]
+    return payload

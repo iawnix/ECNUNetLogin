@@ -30,11 +30,34 @@ auth_ecnu -h
 
 ## Commands
 
+Default output is human-friendly Rich rendering. With a config file, common
+commands stay short:
+
 ```bash
-auth_ecnu login --host HOST --username USER --ask-password
-auth_ecnu logout --host HOST --username USER --check-after
-auth_ecnu check --host HOST
-auth_ecnu build --action login --username USER --password PASS --token TOKEN --ip 192.0.2.10 --acid 1
+auth_ecnu auth --username USER --ask-password
+auth_ecnu check
+auth_ecnu logout --username USER
+```
+
+For scripts and other programs, add `--json` or `--output json`:
+
+```bash
+auth_ecnu check --host HOST --json
+auth_ecnu build --action logout --username USER --token TOKEN --acid 1 --json
+```
+
+Without a config file, pass the host explicitly:
+
+```bash
+auth_ecnu auth --host 172.20.20.11 --username USER --ask-password
+auth_ecnu check --host 172.20.20.11 --json
+```
+
+The legacy command shape is also accepted:
+
+```bash
+auth_ecnu --username USER --password PASS auth
+auth_ecnu --username USER check
 ```
 
 Subcommands:
@@ -47,9 +70,29 @@ Subcommands:
 Useful options:
 
 - `--dry-run` on `login`/`logout` prints the request without submitting it.
-- `--format json|query|both` controls request output for `build` and dry runs.
+- `--json` is a shortcut for `--output json`.
+- `--output rich|json` switches between user-friendly rendering and machine-readable JSON.
 - `--password-stdin` and `--ask-password` avoid putting the password directly in shell history.
 - `--campus-postfix` appends an account suffix when needed.
+
+## Config File
+
+By default, ECNUNetLogin reads `~/.auth-setting` if it exists:
+
+```text
+campus_url=""
+acid="1"
+host="172.20.20.11"
+campus_postfix=""
+```
+
+Use another file with `--config PATH`.
+
+`acid` is the SRun `ac_id`: the access-controller or portal entry ID used in
+signed login/logout requests. For the shown ECNU portal, it is `1`. In normal
+host mode the tool can auto-detect it from the portal page, but keeping it in
+the config file avoids an extra lookup and matches the old `auth_client`
+setting format.
 
 ## Development
 

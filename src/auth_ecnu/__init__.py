@@ -1,6 +1,7 @@
 """ECNU/SRun auth_client Python refactor."""
 
 from .client import SrunClient, auto_fetch_acid, auto_fetch_token, check_online_status, decode_jsonp_or_json, get_text
+from .config import AuthSetting, load_auth_setting, parse_setting_text
 from .models import AuthParams, AuthResult, OnlineStatus, SrunUrlProvider
 from .protocol import (
     add_auth_callback,
@@ -18,6 +19,7 @@ from .protocol import (
 __all__ = [
     "AuthParams",
     "AuthResult",
+    "AuthSetting",
     "OnlineStatus",
     "SrunClient",
     "SrunUrlProvider",
@@ -31,7 +33,9 @@ __all__ = [
     "find_acid",
     "find_json",
     "get_text",
+    "load_auth_setting",
     "online_status_to_dict",
+    "parse_setting_text",
     "query_string",
     "quirk_base64_encode",
     "sha1sum",
