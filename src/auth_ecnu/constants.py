@@ -1,0 +1,12 @@
+"""SRun protocol constants."""
+
+CALLBACK = "C_a_l_l_b_a_c_k"
+ENC_VER = "srun_bx1"
+INFO_PREFIX = "{SRBX1}"
+PASSWORD_PREFIX = "{MD5}"
+CUSTOM_B64_ALPHABET = (
+    "LVoJPiCN2R8G90yg+hmFHuacZ1OWMnrsSTXkYpUq/3dlbfKwv6xztjI7DeBE45QA"
+)
+DEFAULT_TIMEOUT = 8.0
+DEFAULT_USER_AGENT = "auth_ecnu/0.1.0"
+UINT32_MASK = 0xFFFFFFFF

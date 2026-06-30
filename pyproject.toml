@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auth-ecnu"
+version = "0.1.0"
+description = "Python refactor of the existing ECNU auth_client."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "iaw and Codex" }
+]
+dependencies = []
+
+[project.scripts]
+auth_ecnu = "auth_ecnu.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
