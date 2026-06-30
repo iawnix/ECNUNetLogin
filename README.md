@@ -102,6 +102,97 @@ Useful options:
 - `--password-stdin` and `--ask-password` avoid putting the password directly in shell history.
 - `--campus-postfix` appends an account suffix when needed.
 
+## JSON Output
+
+JSON mode is for scripts, monitoring jobs, and other programs. It writes one
+complete JSON document to stdout for each command invocation. The tool does not
+read command arguments from a JSON file; use command-line options or the
+`~/.auth-setting` config file for inputs.
+
+Save the current online status to a JSON file:
+
+```bash
+auth_ecnu check --json > status.json
+```
+
+Inspect it with Python or `jq`:
+
+```bash
+python -m json.tool status.json
+jq -r '.online' status.json
+jq -r '.username // ""' status.json
+jq -r '.ip // ""' status.json
+```
+
+Typical `check --json` output:
+
+```json
+{
+  "ip": "198.51.100.10",
+  "online": true,
+  "raw": "USER,1,2,0,0,0,0,0,198.51.100.10,0",
+  "username": "USER"
+}
+```
+
+Use `online`, `username`, and `ip` for normal automation. `raw` is the original
+comma-separated portal response and is kept for debugging or advanced SRun
+compatibility checks.
+
+Save a login result and immediate status check:
+
+```bash
+auth_ecnu auth --username USER --ask-password --check-after --json > login-result.json
+```
+
+When `--check-after` is used with JSON mode, the output contains both the
+decoded portal response and the follow-up status:
+
+```json
+{
+  "response": {
+    "error": "ok",
+    "suc_msg": "login_ok"
+  },
+  "status": {
+    "ip": "198.51.100.10",
+    "online": true,
+    "raw": "USER,1,2,0,0,0,0,0,198.51.100.10,0",
+    "username": "USER"
+  }
+}
+```
+
+Portal response fields may differ between SRun deployments, so scripts should
+prefer the `status.online` value when they need a stable login success check.
+
+Preview mode can save the signed request without submitting it:
+
+```bash
+auth_ecnu auth --username USER --ask-password --preview --json > request-preview.json
+```
+
+Typical preview output:
+
+```json
+{
+  "query": "callback=...&action=login&username=USER&ac_id=1&...",
+  "request": {
+    "ac_id": "1",
+    "action": "login",
+    "chksum": "0123456789abcdef0123456789abcdef01234567",
+    "info": "{SRBX1}...",
+    "password": "{MD5}...",
+    "username": "USER"
+  }
+}
+```
+
+Treat preview JSON as sensitive. It contains signed request fields derived from
+the password and temporary challenge token. Do not commit, publish, or share
+`request-preview.json`, `login-result.json`, or any real output captured from a
+login session.
+
 ## Config File
 
 By default, ECNUNetLogin reads `~/.auth-setting` if it exists:
