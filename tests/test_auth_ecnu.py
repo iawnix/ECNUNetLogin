@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,10 @@ from auth_ecnu import (
     parse_setting_text,
 )
 from auth_ecnu.cli import main
+from auth_ecnu.config import (
+    default_config_path,
+    load_auth_setting,
+)
 from auth_ecnu.models import SrunUrlProvider
 
 
@@ -206,6 +211,76 @@ class AuthEcnuTests(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(fake.calls, ["alice"])
+
+    def test_default_config_path_honours_xdg_config_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": tmpdir}):
+                path = default_config_path()
+        self.assertEqual(path, Path(tmpdir) / "auth_ecnu" / "setting")
+
+    def test_load_auth_setting_prefers_xdg_over_legacy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            xdg_root = Path(tmpdir) / "config"
+            (xdg_root / "auth_ecnu").mkdir(parents=True)
+            (xdg_root / "auth_ecnu" / "setting").write_text(
+                'host="xdg.host"\nacid="9"\n', encoding="utf-8"
+            )
+            legacy_home = Path(tmpdir) / "home"
+            legacy_home.mkdir()
+            legacy_file = legacy_home / ".auth-setting"
+            legacy_file.write_text('host="legacy.host"\nacid="1"\n', encoding="utf-8")
+
+            env = {
+                "XDG_CONFIG_HOME": str(xdg_root),
+                "HOME": str(legacy_home),
+            }
+            with patch.dict(os.environ, env):
+                with patch("auth_ecnu.config.LEGACY_CONFIG_PATH", legacy_file):
+                    setting = load_auth_setting(None)
+
+            self.assertEqual(setting.host, "xdg.host")
+            self.assertEqual(setting.acid, 9)
+
+    def test_banner_subcommand_emits_json_with_meta(self) -> None:
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            rc = main(["banner", "--json"])
+        self.assertEqual(rc, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertIn("banner", payload)
+        self.assertEqual(payload["meta"]["command"], "banner")
+
+    def test_network_step_is_noop_in_json_mode(self) -> None:
+        from auth_ecnu.render import network_step
+        # JSON-mode context manager must not write anything and must not error.
+        with redirect_stdout(io.StringIO()) as captured:
+            with network_step("resolving challenge", "json"):
+                pass
+        self.assertEqual(captured.getvalue(), "")
+
+    def test_render_auth_response_marks_decode_failure(self) -> None:
+        from auth_ecnu.client import decode_jsonp_or_json
+        from auth_ecnu.render import auth_response_payload, _decode_failed
+
+        payload = auth_response_payload("garbage", decode_jsonp_or_json)
+        self.assertTrue(_decode_failed(payload))
+        self.assertEqual(payload["raw"], "garbage")
+
+    def test_load_auth_setting_falls_back_to_legacy_when_xdg_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            xdg_root = Path(tmpdir) / "config"
+            xdg_root.mkdir()  # no auth_ecnu/setting inside
+            legacy_home = Path(tmpdir) / "home"
+            legacy_home.mkdir()
+            legacy_file = legacy_home / ".auth-setting"
+            legacy_file.write_text('host="legacy.host"\nacid="1"\n', encoding="utf-8")
+
+            env = {"XDG_CONFIG_HOME": str(xdg_root)}
+            with patch.dict(os.environ, env):
+                with patch("auth_ecnu.config.LEGACY_CONFIG_PATH", legacy_file):
+                    setting = load_auth_setting(None)
+
+            self.assertEqual(setting.host, "legacy.host")
 
 
 if __name__ == "__main__":

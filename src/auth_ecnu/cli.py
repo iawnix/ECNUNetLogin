@@ -9,14 +9,16 @@ from typing import Sequence
 
 from . import __version__
 from .client import SrunClient, decode_jsonp_or_json
-from .config import DEFAULT_CONFIG_PATH, AuthSetting, load_auth_setting
+from .config import AuthSetting, default_config_path, load_auth_setting
 from .constants import DEFAULT_TIMEOUT
 from .errors import AuthEcnuError, UsageError
 from .models import OnlineStatus, SrunUrlProvider
 from .render import (
     auth_response_payload,
+    network_step,
     print_data,
     render_auth_response,
+    render_banner,
     render_error,
     render_request,
     render_status,
@@ -57,7 +59,7 @@ def resolve_password(args: argparse.Namespace, *, required: bool) -> str:
 
 
 def apply_config_defaults(args: argparse.Namespace) -> AuthSetting:
-    setting = load_auth_setting(getattr(args, "config", DEFAULT_CONFIG_PATH))
+    setting = load_auth_setting(getattr(args, "config", None))
     if hasattr(args, "host") and not getattr(args, "host", None) and setting.host:
         args.host = setting.host
     if hasattr(args, "acid") and getattr(args, "acid", None) is None and setting.acid is not None:
@@ -71,8 +73,9 @@ def apply_config_defaults(args: argparse.Namespace) -> AuthSetting:
 
 def make_provider(args: argparse.Namespace) -> SrunUrlProvider:
     if not getattr(args, "host", None):
+        config_hint = getattr(args, "config", None) or str(default_config_path())
         raise UsageError(
-            f"--host is required; pass --host or set host in {getattr(args, 'config', DEFAULT_CONFIG_PATH)}"
+            f"--host is required; pass --host or set host in {config_hint}"
         )
     try:
         return SrunUrlProvider.from_host(args.host)
@@ -99,26 +102,30 @@ def run_login(args: argparse.Namespace) -> int:
     client = make_client(args)
     command = _command_name(args)
     try:
-        request = client.build_auth_request(
-            username=username,
-            password=password,
-            action="login",
-            ip=args.ip,
-            acid=args.acid,
-            token=args.token,
-            include_callback=True,
-        )
+        with network_step("resolving challenge & signing request", args.output):
+            request = client.build_auth_request(
+                username=username,
+                password=password,
+                action="login",
+                ip=args.ip,
+                acid=args.acid,
+                token=args.token,
+                include_callback=True,
+            )
     except ValueError as exc:
         raise UsageError(str(exc)) from exc
     if args.preview:
         render_request("Signed Request", request, args.output, command=command)
         return 0
-    result = client.submit_auth(request)
+    with network_step("submitting login request", args.output):
+        result = client.submit_auth(request)
     if args.output == "json" and args.check_after:
+        with network_step("checking online status", args.output):
+            status = client.check_online_status()
         print_data(
             {
                 "response": auth_response_payload(result.body, decode_jsonp_or_json),
-                "status": status_payload(client.check_online_status()),
+                "status": status_payload(status),
             },
             command,
         )
@@ -126,7 +133,9 @@ def run_login(args: argparse.Namespace) -> int:
     render_auth_response("Login Response", result.body, args.output, decode_jsonp_or_json, command=command)
     if args.check_after:
         print()
-        render_status(client.check_online_status(), args.output, command=command)
+        with network_step("checking online status", args.output):
+            status = client.check_online_status()
+        render_status(status, args.output, command=command)
     return 0
 
 
@@ -136,26 +145,30 @@ def run_logout(args: argparse.Namespace) -> int:
     client = make_client(args)
     command = _command_name(args)
     try:
-        request = client.build_auth_request(
-            username=username,
-            password="",
-            action="logout",
-            ip=args.ip,
-            acid=args.acid,
-            token=args.token,
-            include_callback=True,
-        )
+        with network_step("resolving challenge & signing request", args.output):
+            request = client.build_auth_request(
+                username=username,
+                password="",
+                action="logout",
+                ip=args.ip,
+                acid=args.acid,
+                token=args.token,
+                include_callback=True,
+            )
     except ValueError as exc:
         raise UsageError(str(exc)) from exc
     if args.preview:
         render_request("Signed Request", request, args.output, command=command)
         return 0
-    result = client.submit_auth(request)
+    with network_step("submitting logout request", args.output):
+        result = client.submit_auth(request)
     if args.output == "json" and args.check_after:
+        with network_step("checking online status", args.output):
+            status = client.check_online_status()
         print_data(
             {
                 "response": auth_response_payload(result.body, decode_jsonp_or_json),
-                "status": status_payload(client.check_online_status()),
+                "status": status_payload(status),
             },
             command,
         )
@@ -163,13 +176,23 @@ def run_logout(args: argparse.Namespace) -> int:
     render_auth_response("Logout Response", result.body, args.output, decode_jsonp_or_json, command=command)
     if args.check_after:
         print()
-        render_status(client.check_online_status(), args.output, command=command)
+        with network_step("checking online status", args.output):
+            status = client.check_online_status()
+        render_status(status, args.output, command=command)
     return 0
 
 
 def run_check(args: argparse.Namespace) -> int:
     apply_config_defaults(args)
-    render_status(make_client(args).check_online_status(), args.output, command=_command_name(args))
+    client = make_client(args)
+    with network_step("querying rad_user_info", args.output):
+        status = client.check_online_status()
+    render_status(status, args.output, command=_command_name(args))
+    return 0
+
+
+def run_banner(args: argparse.Namespace) -> int:
+    render_banner(args.output)
     return 0
 
 
@@ -177,8 +200,12 @@ def add_config_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--config",
         "-c",
-        default=str(DEFAULT_CONFIG_PATH),
-        help="auth setting file with host, acid, campus_postfix, campus_url, and username",
+        default=None,
+        help=(
+            "path to an auth-setting file (host, acid, campus_postfix, campus_url, "
+            f"username). Defaults to {default_config_path()} with a legacy "
+            f"~/.auth-setting fallback."
+        ),
     )
 
 
@@ -267,6 +294,10 @@ def build_parser() -> argparse.ArgumentParser:
         add_common_network_args(sub)
         add_output_args(sub)
         sub.set_defaults(func=run_check)
+
+    banner = subparsers.add_parser("banner", help="print the auth_ecnu ASCII banner")
+    add_output_args(banner)
+    banner.set_defaults(func=run_banner)
 
     return parser
 

@@ -88,6 +88,13 @@ auth_ecnu check
 auth_ecnu logout --username USER
 ```
 
+Rich output uses a hacker-terminal palette: bright/dim green for normal
+fields, magenta for cryptographic material (`chksum`, `info`, signed
+hashes), red for offline status and errors, yellow for soft warnings,
+and cyan for informational hints (`>>> resolving challenge…`). A
+spinner shows during each network step in rich mode (auto-hidden on
+non-tty streams and in JSON mode).
+
 For scripts and other programs, add `--json` or `--output json`:
 
 ```bash
@@ -117,6 +124,7 @@ Subcommands:
 - `logout`: fetch portal parameters, build the signed request, and submit logout.
 - `check`: query `/cgi-bin/rad_user_info`.
 - `status`: alias for `check`.
+- `banner`: print the hacker-style ASCII banner (supports `--json`).
 
 Useful options:
 
@@ -280,7 +288,23 @@ Scripts should branch on these rather than parsing `error.message`.
 
 ## Config File
 
-By default, ECNUNetLogin reads `~/.auth-setting` if it exists:
+By default, ECNUNetLogin reads its config from an XDG/AppData location:
+
+| Platform     | Default path                                            |
+| ------------ | ------------------------------------------------------- |
+| Linux / macOS | `${XDG_CONFIG_HOME:-~/.config}/auth_ecnu/setting`      |
+| Windows      | `%APPDATA%\auth_ecnu\setting`                           |
+
+The legacy `~/.auth-setting` file is still picked up automatically as
+a fallback, so existing users do not need to migrate. To move it
+manually:
+
+```bash
+mkdir -p ~/.config/auth_ecnu
+mv ~/.auth-setting ~/.config/auth_ecnu/setting
+```
+
+The file format is the same as the original `auth_client`:
 
 ```text
 campus_url=""
@@ -291,9 +315,6 @@ username=""
 ```
 
 Use another file with `--config PATH`.
-
-On Windows, `~/.auth-setting` means the file in the current user's home
-directory, for example `C:\Users\<User>\.auth-setting`.
 
 `acid` is the SRun `ac_id`: the access-controller or portal entry ID used in
 signed login/logout requests. For the shown ECNU portal, it is `1`. In normal
