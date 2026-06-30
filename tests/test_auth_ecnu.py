@@ -30,58 +30,6 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertTrue(request["info"].startswith("{SRBX1}"))
         self.assertRegex(request["chksum"], r"^[0-9a-f]{40}$")
 
-    def test_build_subcommand_prints_json(self) -> None:
-        stdout = io.StringIO()
-        with redirect_stdout(stdout):
-            rc = main(
-                [
-                    "build",
-                    "--action",
-                    "logout",
-                    "--username",
-                    "alice",
-                    "--token",
-                    "abcdefghijklmnop",
-                    "--ip",
-                    "192.0.2.10",
-                    "--acid",
-                    "1",
-                    "--format",
-                    "json",
-                ]
-            )
-
-        self.assertEqual(rc, 0)
-        payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["action"], "logout")
-        self.assertNotIn("password", payload)
-
-    def test_build_subcommand_output_json_prints_machine_payload(self) -> None:
-        stdout = io.StringIO()
-        with redirect_stdout(stdout):
-            rc = main(
-                [
-                    "build",
-                    "--action",
-                    "logout",
-                    "--username",
-                    "alice",
-                    "--token",
-                    "abcdefghijklmnop",
-                    "--ip",
-                    "192.0.2.10",
-                    "--acid",
-                    "1",
-                    "--output",
-                    "json",
-                ]
-            )
-
-        self.assertEqual(rc, 0)
-        payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["request"]["action"], "logout")
-        self.assertIn("query", payload)
-
     def test_check_subcommand_output_json_includes_parsed_ip(self) -> None:
         class FakeClient:
             def check_online_status(self) -> OnlineStatus:
@@ -117,7 +65,7 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertEqual(setting.acid, 1)
         self.assertEqual(setting.campus_postfix, "")
 
-    def test_build_uses_acid_from_config(self) -> None:
+    def test_auth_dry_run_uses_config_and_prints_machine_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "auth-setting"
             config_path.write_text('acid="1"\nhost="172.20.20.11"\n', encoding="utf-8")
@@ -126,33 +74,7 @@ class AuthEcnuTests(unittest.TestCase):
             with redirect_stdout(stdout):
                 rc = main(
                     [
-                        "build",
-                        "--config",
-                        str(config_path),
-                        "--action",
-                        "logout",
-                        "--username",
-                        "alice",
-                        "--token",
-                        "abcdefghijklmnop",
-                        "--output",
-                        "json",
-                    ]
-                )
-
-        self.assertEqual(rc, 0)
-        payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["request"]["ac_id"], "1")
-
-    def test_legacy_auth_command_uses_config_for_dry_run(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / "auth-setting"
-            config_path.write_text('acid="1"\nhost="172.20.20.11"\n', encoding="utf-8")
-
-            stdout = io.StringIO()
-            with redirect_stdout(stdout):
-                rc = main(
-                    [
+                        "auth",
                         "--config",
                         str(config_path),
                         "--username",
@@ -162,42 +84,15 @@ class AuthEcnuTests(unittest.TestCase):
                         "--token",
                         "abcdefghijklmnop",
                         "--dry-run",
-                        "--format",
+                        "--output",
                         "json",
-                        "auth",
                     ]
                 )
 
         self.assertEqual(rc, 0)
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["action"], "login")
-        self.assertEqual(payload["ac_id"], "1")
-        self.assertEqual(payload["callback"], "C_a_l_l_b_a_c_k")
-
-    def test_legacy_offline_entrypoint_still_builds_request(self) -> None:
-        stdout = io.StringIO()
-        with redirect_stdout(stdout):
-            rc = main(
-                [
-                    "--username",
-                    "alice",
-                    "--password",
-                    "secret",
-                    "--token",
-                    "abcdefghijklmnop",
-                    "--ip",
-                    "192.0.2.10",
-                    "--acid",
-                    "1",
-                    "--format",
-                    "json",
-                ]
-            )
-
-        self.assertEqual(rc, 0)
-        payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["action"], "login")
-        self.assertEqual(payload["username"], "alice")
+        self.assertEqual(payload["request"]["action"], "login")
+        self.assertEqual(payload["request"]["ac_id"], "1")
 
 
 if __name__ == "__main__":

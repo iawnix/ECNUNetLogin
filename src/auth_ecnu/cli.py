@@ -5,18 +5,13 @@ from __future__ import annotations
 import argparse
 import getpass
 import sys
-from typing import Mapping, Sequence
+from typing import Sequence
 
 from .client import SrunClient, decode_jsonp_or_json
 from .config import DEFAULT_CONFIG_PATH, AuthSetting, load_auth_setting
 from .constants import DEFAULT_TIMEOUT
 from .errors import CliError
-from .models import AuthParams, OnlineStatus, SrunUrlProvider
-from .protocol import (
-    add_auth_callback,
-    build_request_params,
-    query_string,
-)
+from .models import OnlineStatus, SrunUrlProvider
 from .render import (
     auth_response_payload,
     print_json,
@@ -82,19 +77,8 @@ def make_client(args: argparse.Namespace) -> SrunClient:
     )
 
 
-def print_request(request: Mapping[str, str], output: str, legacy_format: str | None = None) -> None:
-    if legacy_format == "json":
-        print_json(dict(request))
-    elif legacy_format == "query":
-        print(query_string(request))
-    elif legacy_format == "both":
-        print_json(dict(request))
-        print()
-        print(query_string(request))
-    elif legacy_format is not None:
-        raise CliError(f"unsupported output format: {legacy_format}")
-    else:
-        render_request("Signed Request", request, output)
+def print_request(request: dict[str, str], output: str) -> None:
+    render_request("Signed Request", request, output)
 
 
 def print_auth_response(title: str, body: str, output: str) -> None:
@@ -103,34 +87,6 @@ def print_auth_response(title: str, body: str, output: str) -> None:
 
 def print_online_status(status: OnlineStatus, output: str) -> None:
     render_status(status, output)
-
-
-def run_build(args: argparse.Namespace) -> int:
-    apply_config_defaults(args)
-    action = args.action
-    password = resolve_password(args, required=action == "login")
-    username = normalize_username(args.username, args.campus_postfix)
-    if args.acid is None:
-        raise CliError(f"--acid is required for offline build; pass --acid or set acid in {args.config}")
-
-    try:
-        request = build_request_params(
-            AuthParams(
-                username=username,
-                password=password,
-                token=args.token,
-                action=action,
-                ip=args.ip,
-                acid=args.acid,
-            )
-        )
-    except ValueError as exc:
-        raise CliError(str(exc)) from exc
-
-    if args.callback:
-        request = add_auth_callback(request)
-    print_request(request, args.output, args.format)
-    return 0
 
 
 def run_login(args: argparse.Namespace) -> int:
@@ -148,7 +104,7 @@ def run_login(args: argparse.Namespace) -> int:
         include_callback=True,
     )
     if args.dry_run:
-        print_request(request, args.output, args.format)
+        print_request(request, args.output)
         return 0
     result = client.submit_auth(request)
     if args.output == "json" and args.check_after:
@@ -180,7 +136,7 @@ def run_logout(args: argparse.Namespace) -> int:
         include_callback=True,
     )
     if args.dry_run:
-        print_request(request, args.output, args.format)
+        print_request(request, args.output)
         return 0
     result = client.submit_auth(request)
     if args.output == "json" and args.check_after:
@@ -261,15 +217,9 @@ def add_output_args(parser: argparse.ArgumentParser) -> None:
 def add_request_build_args(parser: argparse.ArgumentParser, *, default_action: str | None = None) -> None:
     if default_action is None:
         parser.add_argument("--action", choices=("login", "logout"), required=True)
-    parser.add_argument("--token", required=default_action is None, help="challenge token")
+    parser.add_argument("--token", help=argparse.SUPPRESS)
     parser.add_argument("--ip", default="", help="client IP; empty lets the portal infer it if supported")
     parser.add_argument("--acid", type=int, help="portal ac_id; defaults to config or auto-detect in host mode")
-    parser.add_argument(
-        "--format",
-        choices=("json", "query", "both"),
-        default=None,
-        help=argparse.SUPPRESS,
-    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -314,99 +264,18 @@ def build_parser() -> argparse.ArgumentParser:
     add_output_args(check)
     check.set_defaults(func=run_check)
 
-    build = subparsers.add_parser("build", help="offline request builder; never contacts the portal")
-    add_config_args(build)
-    add_identity_args(build)
-    add_password_args(build)
-    add_output_args(build)
-    add_request_build_args(build)
-    build.add_argument(
-        "--callback",
-        "--with-callback",
-        action="store_true",
-        help="include JSONP callback in the auth request",
-    )
-    build.set_defaults(func=run_build)
     return parser
-
-
-def build_legacy_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="auth_ecnu",
-        description=f"{CLI_DESCRIPTION} Legacy-compatible entrypoint.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    add_config_args(parser)
-    parser.add_argument("--host", "-H", help="SRun portal host, e.g. 10.0.0.1")
-    parser.add_argument("--username", "-u", help="account name")
-    parser.add_argument("--password", "-p", default="", help="account password")
-    parser.add_argument("--password-stdin", action="store_true", help="read password from stdin")
-    parser.add_argument("--ask-password", action="store_true", help="prompt for password")
-    parser.add_argument("--token", help="challenge token from get_challenge; offline mode only")
-    parser.add_argument("--ip", default="", help="client IP; empty lets the portal infer it if supported")
-    parser.add_argument("--acid", type=int, help="portal ac_id; auto-detected in --host mode if omitted")
-    parser.add_argument("--action", choices=("login", "logout"), default="login")
-    parser.add_argument("--logout", action="store_true", help="shortcut for --action logout")
-    parser.add_argument("--campus", action="store_true", help="legacy no-op; use --campus-postfix")
-    parser.add_argument("--campus-postfix", default="", help="append suffix to username")
-    parser.add_argument("legacy_command", nargs="?", choices=("auth", "check"))
-    parser.add_argument("--with-callback", action="store_true")
-    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
-    parser.add_argument("--debug", "-d", action="store_true")
-    parser.add_argument("--check", action="store_true", help="query /cgi-bin/rad_user_info and exit")
-    parser.add_argument("--check-after", action="store_true", help="query online status after login/logout")
-    parser.add_argument("--dry-run", action="store_true", help="print auth request without submitting it")
-    add_output_args(parser)
-    parser.add_argument("--format", choices=("json", "query", "both"), default=None, help=argparse.SUPPRESS)
-    return parser
-
-
-def run_legacy(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
-    if args.legacy_command == "check":
-        args.check = True
-    if args.check:
-        if not args.host:
-            apply_config_defaults(args)
-        return run_check(args)
-
-    if not args.username:
-        parser.error("--username is required")
-
-    action = "logout" if args.logout else args.action
-    args.action = action
-    args.callback = args.with_callback or bool(args.host)
-    apply_config_defaults(args)
-
-    if args.host:
-        if action == "login":
-            return run_login(args)
-        return run_logout(args)
-
-    if not args.token:
-        parser.error("--token is required when --host is not set")
-    if args.acid is None:
-        parser.error("--acid is required when --host is not set")
-    return run_build(args)
-
-
-def is_modern_cli(argv: Sequence[str]) -> bool:
-    commands = {"auth", "login", "logout", "check", "build"}
-    return bool(argv) and argv[0] in commands
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     try:
+        parser = build_parser()
         if not argv:
-            parser = build_parser()
             parser.print_help()
             return 0
-        if argv[0] in {"-h", "--help"} or is_modern_cli(argv):
-            args = build_parser().parse_args(argv)
-            return args.func(args)
-        legacy_parser = build_legacy_parser()
-        args = legacy_parser.parse_args(argv)
-        return run_legacy(args, legacy_parser)
+        args = parser.parse_args(argv)
+        return args.func(args)
     except CliError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

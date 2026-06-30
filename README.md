@@ -43,7 +43,7 @@ For scripts and other programs, add `--json` or `--output json`:
 
 ```bash
 auth_ecnu check --host HOST --json
-auth_ecnu build --action logout --username USER --token TOKEN --acid 1 --json
+auth_ecnu auth --username USER --ask-password --json
 ```
 
 Without a config file, pass the host explicitly:
@@ -53,19 +53,20 @@ auth_ecnu auth --host 172.20.20.11 --username USER --ask-password
 auth_ecnu check --host 172.20.20.11 --json
 ```
 
-The legacy command shape is also accepted:
+To inspect the signed request without submitting login, use dry-run mode. It
+may contact the portal to fetch the temporary challenge token, but it does not
+submit the final login request:
 
 ```bash
-auth_ecnu --username USER --password PASS auth
-auth_ecnu --username USER check
+auth_ecnu auth --username USER --ask-password --dry-run --json
 ```
 
 Subcommands:
 
 - `login`: fetch portal parameters, build the signed request, and submit login.
+- `auth`: alias for `login`.
 - `logout`: fetch portal parameters, build the signed request, and submit logout.
 - `check`: query `/cgi-bin/rad_user_info`.
-- `build`: build a signed request offline without contacting the portal.
 
 Useful options:
 
@@ -93,6 +94,10 @@ signed login/logout requests. For the shown ECNU portal, it is `1`. In normal
 host mode the tool can auto-detect it from the portal page, but keeping it in
 the config file avoids an extra lookup and matches the old `auth_client`
 setting format.
+
+The SRun `token` is a temporary challenge returned by the portal's
+`/cgi-bin/get_challenge` endpoint. Normal `auth`, `login`, and `logout`
+commands fetch it automatically. Users do not need to provide or know the token.
 
 ## Development
 
