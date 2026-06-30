@@ -103,7 +103,7 @@ def run_login(args: argparse.Namespace) -> int:
         token=args.token,
         include_callback=True,
     )
-    if args.dry_run:
+    if args.preview:
         print_request(request, args.output)
         return 0
     result = client.submit_auth(request)
@@ -135,7 +135,7 @@ def run_logout(args: argparse.Namespace) -> int:
         token=args.token,
         include_callback=True,
     )
-    if args.dry_run:
+    if args.preview:
         print_request(request, args.output)
         return 0
     result = client.submit_auth(request)
@@ -236,7 +236,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_password_args(login)
     add_output_args(login)
     add_request_build_args(login, default_action="login")
-    login.add_argument("--dry-run", action="store_true", help="print request without submitting it")
+    login.add_argument("--preview", action="store_true", help="print the signed request without submitting it")
     login.add_argument("--check-after", action="store_true", help="query online status after login")
     login.set_defaults(func=run_login)
 
@@ -246,7 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_password_args(auth)
     add_output_args(auth)
     add_request_build_args(auth, default_action="login")
-    auth.add_argument("--dry-run", action="store_true", help="print request without submitting it")
+    auth.add_argument("--preview", action="store_true", help="print the signed request without submitting it")
     auth.add_argument("--check-after", action="store_true", help="query online status after login")
     auth.set_defaults(func=run_login)
 
@@ -255,7 +255,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_identity_args(logout)
     add_output_args(logout)
     add_request_build_args(logout, default_action="logout")
-    logout.add_argument("--dry-run", action="store_true", help="print request without submitting it")
+    logout.add_argument("--preview", action="store_true", help="print the signed request without submitting it")
     logout.add_argument("--check-after", action="store_true", help="query online status after logout")
     logout.set_defaults(func=run_logout)
 

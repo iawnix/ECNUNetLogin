@@ -53,12 +53,12 @@ auth_ecnu auth --host 172.20.20.11 --username USER --ask-password
 auth_ecnu check --host 172.20.20.11 --json
 ```
 
-To inspect the signed request without submitting login, use dry-run mode. It
+To inspect the signed request without submitting login, use preview mode. It
 may contact the portal to fetch the temporary challenge token, but it does not
 submit the final login request:
 
 ```bash
-auth_ecnu auth --username USER --ask-password --dry-run --json
+auth_ecnu auth --username USER --ask-password --preview --json
 ```
 
 Subcommands:
@@ -70,7 +70,7 @@ Subcommands:
 
 Useful options:
 
-- `--dry-run` on `login`/`logout` prints the request without submitting it.
+- `--preview` on `auth`/`login`/`logout` prints the signed request without submitting it.
 - `--json` is a shortcut for `--output json`.
 - `--output rich|json` switches between user-friendly rendering and machine-readable JSON.
 - `--password-stdin` and `--ask-password` avoid putting the password directly in shell history.

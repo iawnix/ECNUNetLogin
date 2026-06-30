@@ -65,7 +65,7 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertEqual(setting.acid, 1)
         self.assertEqual(setting.campus_postfix, "")
 
-    def test_auth_dry_run_uses_config_and_prints_machine_payload(self) -> None:
+    def test_auth_preview_uses_config_and_prints_machine_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "auth-setting"
             config_path.write_text('acid="1"\nhost="172.20.20.11"\n', encoding="utf-8")
@@ -83,7 +83,7 @@ class AuthEcnuTests(unittest.TestCase):
                         "secret",
                         "--token",
                         "abcdefghijklmnop",
-                        "--dry-run",
+                        "--preview",
                         "--output",
                         "json",
                     ]
