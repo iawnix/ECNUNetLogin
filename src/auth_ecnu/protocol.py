@@ -28,6 +28,7 @@ almost certainly here. Diff against the worked example in
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
 import urllib.parse
@@ -128,7 +129,7 @@ def xencode(data: str, key: str) -> bytes:
     v = _to_uint32_words(data, include_length=True)
     k = _to_uint32_words(key, include_length=False)
     if len(k) < 4:
-        raise ValueError("token key is too short for XEncode")
+        k.extend([0] * (4 - len(k)))
 
     n = len(v) - 1
     rounds = 6 + 52 // len(v)
@@ -175,20 +176,24 @@ def build_request_params(params: AuthParams) -> Dict[str, str]:
         "ac_id": acid,
         "n": "200",
         "type": "1",
-        "double_stack": "1",
+        "double_stack": "0",
         "ip": params.ip,
         "username": params.username,
         "info": info,
     }
 
     if params.action == "login":
-        md5_hex = hashlib.md5(params.password.encode()).hexdigest()
-        request["password"] = PASSWORD_PREFIX + md5_hex
+        hmac_md5_hex = hmac.new(
+            params.token.encode(),
+            params.password.encode(),
+            hashlib.md5,
+        ).hexdigest()
+        request["password"] = PASSWORD_PREFIX + hmac_md5_hex
         checksum_parts = [
             params.token,
             params.username,
             params.token,
-            md5_hex,
+            hmac_md5_hex,
             params.token,
             acid,
             params.token,
@@ -224,7 +229,6 @@ def build_challenge_params(username: str, ip: str) -> Dict[str, str]:
     return {
         "ip": ip,
         "username": username,
-        "double_stack": "1",
         "callback": CALLBACK,
     }
 

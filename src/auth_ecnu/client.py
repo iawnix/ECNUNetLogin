@@ -10,7 +10,7 @@ from typing import Any, Dict, Mapping
 
 from .constants import DEFAULT_TIMEOUT, DEFAULT_USER_AGENT
 from .errors import NetworkError, PortalError, UsageError
-from .models import AuthParams, AuthResult, OnlineStatus, SrunUrlProvider
+from .models import AuthParams, AuthResult, Challenge, OnlineStatus, SrunUrlProvider
 from .protocol import (
     add_auth_callback,
     build_challenge_params,
@@ -41,7 +41,7 @@ class SrunClient:
         html = self.get_text(self.provider.index())
         return find_acid(html)
 
-    def fetch_token(self, username: str, ip: str) -> str:
+    def fetch_challenge(self, username: str, ip: str) -> Challenge:
         body = self.get_text(
             self.provider.challenge(),
             build_challenge_params(username=username, ip=ip),
@@ -50,7 +50,13 @@ class SrunClient:
         token = data.get("challenge")
         if not isinstance(token, str) or not token:
             raise PortalError(f"challenge token not found in response: {body!r}")
-        return token
+        resolved_ip = data.get("online_ip") or data.get("client_ip") or ""
+        if not isinstance(resolved_ip, str):
+            resolved_ip = ""
+        return Challenge(token=token, ip=resolved_ip)
+
+    def fetch_token(self, username: str, ip: str) -> str:
+        return self.fetch_challenge(username, ip).token
 
     def build_auth_request(
         self,
@@ -64,14 +70,21 @@ class SrunClient:
         include_callback: bool = True,
     ) -> Dict[str, str]:
         resolved_acid = self.fetch_acid() if acid is None else acid
-        resolved_token = self.fetch_token(username, ip) if token is None else token
+        resolved_ip = ip
+        if token is None:
+            challenge = self.fetch_challenge(username, ip)
+            resolved_token = challenge.token
+            if not resolved_ip:
+                resolved_ip = challenge.ip
+        else:
+            resolved_token = token
         request = build_request_params(
             AuthParams(
                 username=username,
                 password=password,
                 token=resolved_token,
                 action=action,
-                ip=ip,
+                ip=resolved_ip,
                 acid=resolved_acid,
             )
         )
@@ -103,17 +116,31 @@ def get_text(
 ) -> str:
     """One-shot HTTP GET helper."""
 
-    if params:
-        url = f"{url}?{query_string(params)}"
+    request_url = _url_with_params(url, params)
+    safe_url = _url_with_params(url, _redact_params(params))
     if debug:
-        print(f"GET {url}", file=sys.stderr)
-    req = urllib.request.Request(url, headers={"User-Agent": user_agent})
+        print(f"GET {safe_url}", file=sys.stderr)
+    req = urllib.request.Request(request_url, headers={"User-Agent": user_agent})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read().decode("utf-8", errors="replace")
     except urllib.error.URLError as exc:
         reason = getattr(exc, "reason", exc)
-        raise NetworkError(f"request failed for {url}: {reason}") from exc
+        raise NetworkError(f"request failed for {safe_url}: {reason}") from exc
+
+
+def _url_with_params(url: str, params: Mapping[str, str] | None) -> str:
+    return f"{url}?{query_string(params)}" if params else url
+
+
+def _redact_params(params: Mapping[str, str] | None) -> Dict[str, str] | None:
+    if params is None:
+        return None
+    sensitive = {"password", "info", "chksum"}
+    return {
+        key: "<redacted>" if key.lower() in sensitive else value
+        for key, value in params.items()
+    }
 
 
 def decode_jsonp_or_json(text: str) -> Dict[str, Any]:

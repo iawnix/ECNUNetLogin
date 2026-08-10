@@ -7,16 +7,15 @@ import getpass
 import json
 import sys
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from . import __version__
 from .client import SrunClient, decode_jsonp_or_json
 from .config import AuthSetting, default_config_path, load_auth_setting, parse_setting_text
 from .constants import DEFAULT_TIMEOUT
-from .errors import AuthEcnuError, UsageError
-from .models import OnlineStatus, SrunUrlProvider
+from .errors import AuthEcnuError, EXIT_NEGATIVE, EXIT_OK, UsageError
+from .models import AuthResult, OnlineStatus, SrunUrlProvider
 from .render import (
-    auth_response_payload,
     network_step,
     print_data,
     render_auth_response,
@@ -94,6 +93,56 @@ def _command_name(args: argparse.Namespace) -> str:
     return getattr(args, "command", "") or ""
 
 
+def _auth_response_succeeded(payload: Mapping[str, Any]) -> bool:
+    return payload.get("error") == "ok"
+
+
+def _finish_auth(
+    *,
+    args: argparse.Namespace,
+    client: SrunClient,
+    result: AuthResult,
+    command: str,
+    title: str,
+    desired_online: bool,
+) -> int:
+    response = decode_jsonp_or_json(result.body)
+    if not args.check_after:
+        render_auth_response(
+            title,
+            result.body,
+            args.output,
+            decode_jsonp_or_json,
+            command=command,
+        )
+        return EXIT_OK if _auth_response_succeeded(response) else EXIT_NEGATIVE
+
+    with network_step("checking online status", args.output):
+        status = client.check_online_status()
+    if args.output == "json":
+        print_data(
+            {"response": response, "status": status_payload(status)},
+            command,
+        )
+    else:
+        render_auth_response(
+            title,
+            result.body,
+            args.output,
+            decode_jsonp_or_json,
+            command=command,
+        )
+        if args.output == "rich":
+            print()
+        render_status(
+            status,
+            args.output,
+            command=command,
+            host=getattr(args, "host", ""),
+        )
+    return EXIT_OK if status.online is desired_online else EXIT_NEGATIVE
+
+
 def run_login(args: argparse.Namespace) -> int:
     apply_config_defaults(args)
     password = resolve_password(args, required=True)
@@ -118,24 +167,14 @@ def run_login(args: argparse.Namespace) -> int:
         return 0
     with network_step("submitting login request", args.output):
         result = client.submit_auth(request)
-    if args.output == "json" and args.check_after:
-        with network_step("checking online status", args.output):
-            status = client.check_online_status()
-        print_data(
-            {
-                "response": auth_response_payload(result.body, decode_jsonp_or_json),
-                "status": status_payload(status),
-            },
-            command,
-        )
-        return 0
-    render_auth_response("Login Response", result.body, args.output, decode_jsonp_or_json, command=command)
-    if args.check_after:
-        print()
-        with network_step("checking online status", args.output):
-            status = client.check_online_status()
-        render_status(status, args.output, command=command, host=getattr(args, "host", ""))
-    return 0
+    return _finish_auth(
+        args=args,
+        client=client,
+        result=result,
+        command=command,
+        title="Login Response",
+        desired_online=True,
+    )
 
 
 def run_logout(args: argparse.Namespace) -> int:
@@ -161,24 +200,14 @@ def run_logout(args: argparse.Namespace) -> int:
         return 0
     with network_step("submitting logout request", args.output):
         result = client.submit_auth(request)
-    if args.output == "json" and args.check_after:
-        with network_step("checking online status", args.output):
-            status = client.check_online_status()
-        print_data(
-            {
-                "response": auth_response_payload(result.body, decode_jsonp_or_json),
-                "status": status_payload(status),
-            },
-            command,
-        )
-        return 0
-    render_auth_response("Logout Response", result.body, args.output, decode_jsonp_or_json, command=command)
-    if args.check_after:
-        print()
-        with network_step("checking online status", args.output):
-            status = client.check_online_status()
-        render_status(status, args.output, command=command, host=getattr(args, "host", ""))
-    return 0
+    return _finish_auth(
+        args=args,
+        client=client,
+        result=result,
+        command=command,
+        title="Logout Response",
+        desired_online=False,
+    )
 
 
 def run_check(args: argparse.Namespace) -> int:
@@ -187,7 +216,7 @@ def run_check(args: argparse.Namespace) -> int:
     with network_step("querying rad_user_info", args.output):
         status = client.check_online_status()
     render_status(status, args.output, command=_command_name(args), host=getattr(args, "host", ""))
-    return 0
+    return EXIT_OK if status.online else EXIT_NEGATIVE
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +541,11 @@ def add_config_args(parser: argparse.ArgumentParser) -> None:
 
 def add_common_network_args(parser: argparse.ArgumentParser) -> None:
     add_config_args(parser)
-    parser.add_argument("--host", "-H", help="SRun portal host, e.g. 10.0.0.1")
+    parser.add_argument(
+        "--host",
+        "-H",
+        help="SRun portal URL or host, e.g. https://login.ecnu.edu.cn",
+    )
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout in seconds")
     parser.add_argument("--debug", "-d", action="store_true", help="print HTTP requests to stderr")
 

@@ -3,7 +3,7 @@
 > English · [简体中文](zh-CN/troubleshooting.md)
 
 Run any failing command with `--debug` to log each outbound URL to
-stderr; that almost always pinpoints which step is misbehaving.
+stderr; signed fields are redacted before printing.
 
 ## Common errors
 
@@ -25,7 +25,7 @@ stderr; that almost always pinpoints which step is misbehaving.
 ## When to file a bug
 
 If a request used to work and now fails with `portal_error`, the
-portal probably changed something — diff your `--debug` log against
+portal probably changed something — compare your redacted `--debug` log against
 the working case. If `protocol.py` needs to change, see
 [`protocol.md`](protocol.md) for the wire format and the worked
 example.

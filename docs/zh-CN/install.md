@@ -40,7 +40,7 @@ auth_ecnu 提供一个统一的安装脚本 —— `scripts/setup.sh` —— 它
 ```bash
 ./scripts/setup.sh install \
   --method=pipx \
-  --host=172.20.20.11 \
+  --host=https://login.ecnu.edu.cn \
   --acid=1 \
   --yes
 ```
@@ -103,7 +103,7 @@ auth_ecnu --version
 然后手动写配置到 `%APPDATA%\auth_ecnu\setting`：
 
 ```text
-host="172.20.20.11"
+host="https://login.ecnu.edu.cn"
 acid="1"
 campus_postfix=""
 campus_url=""

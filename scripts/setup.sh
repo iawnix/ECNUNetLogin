@@ -7,7 +7,7 @@
 #
 # Quick usage:
 #   ./scripts/setup.sh install        interactive
-#   ./scripts/setup.sh install --method=pipx --host=172.20.20.11 --yes
+#   ./scripts/setup.sh install --method=pipx --host=https://login.ecnu.edu.cn --yes
 #   ./scripts/setup.sh status
 #   ./scripts/setup.sh uninstall --purge --yes
 #
@@ -85,7 +85,7 @@ Install options:
                                 default: \$ROOT/.venv)
   --config-path=PATH          config file location
                                 (default: $DEFAULT_CONFIG_FILE)
-  --host=HOST                 initial portal host (e.g. 172.20.20.11)
+  --host=HOST                 portal URL/host (e.g. https://login.ecnu.edu.cn)
   --acid=N                    initial ac_id (default: 1)
   --campus-postfix=SFX        initial campus_postfix (empty by default)
   --campus-url=URL            initial campus_url (empty by default)

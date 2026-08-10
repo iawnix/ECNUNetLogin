@@ -20,7 +20,7 @@ ac_id、可选 postfix、可选 URL。
 ## 文件格式
 
 ```text
-host="172.20.20.11"
+host="https://login.ecnu.edu.cn"
 acid="1"
 campus_postfix=""
 campus_url=""
@@ -28,7 +28,7 @@ campus_url=""
 
 | 键               | 类型   | 含义                                                          |
 | ---------------- | ------ | ------------------------------------------------------------- |
-| `host`           | string | SRun 门户主机或 `host:port`，不要带 `http://`                 |
+| `host`           | string | SRun 门户 URL、主机或 `host:port`；华师大推荐使用 HTTPS       |
 | `acid`           | int    | 门户 `ac_id`，华师大用 `1`                                    |
 | `campus_postfix` | string | 账号后缀；`--username` 末尾未带它时会自动追加                 |
 | `campus_url`     | string | 仅作信息字段，保留兼容                                        |

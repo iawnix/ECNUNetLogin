@@ -41,7 +41,7 @@ Useful for provisioning scripts and CI:
 ```bash
 ./scripts/setup.sh install \
   --method=pipx \
-  --host=172.20.20.11 \
+  --host=https://login.ecnu.edu.cn \
   --acid=1 \
   --yes
 ```
@@ -106,7 +106,7 @@ Then create the config file by hand at
 `%APPDATA%\auth_ecnu\setting`:
 
 ```text
-host="172.20.20.11"
+host="https://login.ecnu.edu.cn"
 acid="1"
 campus_postfix=""
 campus_url=""

@@ -3,6 +3,20 @@
 Notable changes per release. Schema follows [Keep a Changelog](https://keepachangelog.com/)
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] — 2026-08-11
+
+### Fixed
+- Match ECNU's current SRun signer with challenge-keyed HMAC-MD5 and
+  `double_stack=0`.
+- Reuse `online_ip` / `client_ip` from the challenge when `--ip` is
+  omitted.
+- Return exit code `1` for valid negative states such as rejected
+  authentication or an offline `check`.
+- Redact `password`, `info`, and `chksum` from debug and network-error
+  URLs.
+- Document `https://login.ecnu.edu.cn` as the preferred ECNU portal
+  value while retaining bare-host HTTP compatibility.
+
 ## [0.6.0] — 2026-07-01
 
 ### Added

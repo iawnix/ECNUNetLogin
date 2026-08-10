@@ -20,7 +20,7 @@ with `mode 600` and skeleton values you provide interactively.
 ## Schema
 
 ```text
-host="172.20.20.11"
+host="https://login.ecnu.edu.cn"
 acid="1"
 campus_postfix=""
 campus_url=""
@@ -28,7 +28,7 @@ campus_url=""
 
 | Key              | Type   | Purpose                                                       |
 | ---------------- | ------ | ------------------------------------------------------------- |
-| `host`           | string | SRun portal hostname or `host:port`. No scheme.               |
+| `host`           | string | SRun portal URL, hostname, or `host:port`; HTTPS is recommended for ECNU |
 | `acid`           | int    | Portal `ac_id`. ECNU's deployment uses `1`.                   |
 | `campus_postfix` | string | Account suffix; appended to `--username` if not already there |
 | `campus_url`     | string | Currently informational; carried for compatibility            |

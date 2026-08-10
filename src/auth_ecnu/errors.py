@@ -3,6 +3,7 @@
 Exit code convention (mirrors common Unix tooling):
 
 - 0  success
+- 1  valid negative result: rejected authentication or offline status
 - 2  usage error: bad/missing CLI input or invalid config
 - 3  network error: portal unreachable, timeout, DNS, TLS, etc.
 - 4  portal error: portal reachable but returned an unexpected payload
@@ -10,6 +11,7 @@ Exit code convention (mirrors common Unix tooling):
 
 
 EXIT_OK = 0
+EXIT_NEGATIVE = 1
 EXIT_USAGE = 2
 EXIT_NETWORK = 3
 EXIT_PORTAL = 4

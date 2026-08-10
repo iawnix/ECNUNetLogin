@@ -19,14 +19,14 @@ suppressed. The exit code carries the result.
 
 ## JSON output envelope
 
-Every success document is a JSON object containing the requested data
-plus a top-level `meta` block. Every error document is an object with
-`error` and `meta`.
+Every non-exception result is a JSON object containing the requested
+data plus a top-level `meta` block. Every operational error document
+is an object with `error` and `meta`.
 
 ```json
 "meta": {
   "tool": "auth_ecnu",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "command": "check",
   "schema_version": 1
 }
@@ -41,7 +41,7 @@ bump it.
 ```json
 {
   "ip": "198.51.100.10",
-  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.6.0" },
+  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.6.1" },
   "online": true,
   "raw": "alice,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "alice"
@@ -74,6 +74,10 @@ That returns:
 ```
 
 Branch on `status.online`, not on `response.suc_msg`.
+
+Without `--check-after`, login/logout returns exit code `0` only when
+the decoded portal response has `error == "ok"`. With `--check-after`,
+the observed target state wins: online for login, offline for logout.
 
 ### `--preview` (login/logout)
 
@@ -121,6 +125,7 @@ In `json` mode, errors go to **stderr** (not stdout) and use this shape:
 | Code | Meaning                                                   |
 | ---- | --------------------------------------------------------- |
 | 0    | success                                                   |
+| 1    | valid negative result: rejected login/logout or offline check |
 | 2    | usage error: missing/invalid CLI input or bad config file |
 | 3    | network error: portal unreachable, timeout, DNS, TLS      |
 | 4    | portal error: portal reachable but response malformed     |

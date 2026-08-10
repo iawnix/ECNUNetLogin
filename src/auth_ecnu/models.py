@@ -57,6 +57,12 @@ class AuthParams:
 
 
 @dataclasses.dataclass(frozen=True)
+class Challenge:
+    token: str
+    ip: str = ""
+
+
+@dataclasses.dataclass(frozen=True)
 class OnlineStatus:
     online: bool
     username: str = ""

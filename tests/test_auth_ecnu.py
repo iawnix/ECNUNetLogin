@@ -3,17 +3,24 @@ import json
 import os
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
 from auth_ecnu import (
     AuthParams,
+    AuthResult,
+    Challenge,
+    NetworkError,
     OnlineStatus,
     PortalError,
+    SrunClient,
     __version__,
+    build_challenge_params,
     build_request_params,
     decode_jsonp_or_json,
+    get_text,
     parse_setting_text,
 )
 from auth_ecnu.cli import main
@@ -50,8 +57,8 @@ class AuthEcnuTests(unittest.TestCase):
             "rumSFtK0lodivvxUHcPuOE20tJkuRQh/c/zvInxKnCkh6t904t8rLe9APJfpvs7A"
             "l/8NT5V0k8vnIvv1rEy5uXMj2PXMcdKM+X1dNlJVNyEgKK+lY8VD4FjtyUokAe0d"
         )
-        expected_chksum = "31788c4f2352942da2b506e9a1015569416f5744"
-        expected_password = "{MD5}5ebe2294ecd0e0f08eab7690d2a6ee69"
+        expected_chksum = "f961ac3edbc36e285a68cb52122563cca05f2296"
+        expected_password = "{MD5}9e911cbda10e08c868da0db662595a8c"
 
         encoded = xencode(info_json, token)
         self.assertEqual(encoded.hex(), expected_xencode,
@@ -67,6 +74,7 @@ class AuthEcnuTests(unittest.TestCase):
                          "chksum field order or hashing changed — diff against docs/protocol.md")
         self.assertEqual(request["info"], "{SRBX1}" + expected_info_b64)
         self.assertEqual(request["password"], expected_password)
+        self.assertEqual(request["double_stack"], "0")
 
     def test_build_request_login_contains_signed_fields(self) -> None:
         request = build_request_params(
@@ -83,9 +91,78 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertEqual(request["action"], "login")
         self.assertEqual(request["ac_id"], "1")
         self.assertEqual(request["username"], "alice")
-        self.assertEqual(request["password"], "{MD5}5ebe2294ecd0e0f08eab7690d2a6ee69")
+        self.assertEqual(request["password"], "{MD5}9e911cbda10e08c868da0db662595a8c")
         self.assertTrue(request["info"].startswith("{SRBX1}"))
         self.assertRegex(request["chksum"], r"^[0-9a-f]{40}$")
+
+    def test_xencode_pads_short_token_key_like_srun_frontend(self) -> None:
+        from auth_ecnu.protocol import xencode
+
+        self.assertTrue(xencode("payload", "key"))
+
+    def test_challenge_request_uses_ecnu_single_stack_shape(self) -> None:
+        params = build_challenge_params("alice", "")
+
+        self.assertNotIn("double_stack", params)
+        self.assertEqual(params["username"], "alice")
+
+    def test_challenge_ip_fills_empty_request_ip(self) -> None:
+        client = SrunClient(SrunUrlProvider.from_host("portal.example"))
+        with patch.object(
+            client,
+            "fetch_challenge",
+            return_value=Challenge(token="abcdefghijklmnop", ip="198.51.100.23"),
+        ):
+            request = client.build_auth_request(
+                username="alice",
+                password="secret",
+                action="login",
+                ip="",
+                acid=1,
+            )
+
+        self.assertEqual(request["ip"], "198.51.100.23")
+
+    def test_explicit_ip_wins_over_challenge_ip(self) -> None:
+        client = SrunClient(SrunUrlProvider.from_host("portal.example"))
+        with patch.object(
+            client,
+            "fetch_challenge",
+            return_value=Challenge(token="abcdefghijklmnop", ip="198.51.100.23"),
+        ):
+            request = client.build_auth_request(
+                username="alice",
+                password="secret",
+                action="login",
+                ip="192.0.2.10",
+                acid=1,
+            )
+
+        self.assertEqual(request["ip"], "192.0.2.10")
+
+    def test_fetch_challenge_prefers_online_ip_then_client_ip(self) -> None:
+        client = SrunClient(SrunUrlProvider.from_host("portal.example"))
+        with patch.object(
+            client,
+            "get_text",
+            side_effect=[
+                (
+                    'C_a_l_l_b_a_c_k({"challenge":"abcdefghijklmnop",'
+                    '"online_ip":"198.51.100.23","client_ip":"192.0.2.10"})'
+                ),
+                (
+                    'C_a_l_l_b_a_c_k({"challenge":"ponmlkjihgfedcba",'
+                    '"client_ip":"192.0.2.10"})'
+                ),
+            ],
+        ):
+            challenge = client.fetch_challenge("alice", "")
+            fallback = client.fetch_challenge("alice", "")
+
+        self.assertEqual(challenge.token, "abcdefghijklmnop")
+        self.assertEqual(challenge.ip, "198.51.100.23")
+        self.assertEqual(fallback.token, "ponmlkjihgfedcba")
+        self.assertEqual(fallback.ip, "192.0.2.10")
 
     def test_check_subcommand_output_json_includes_parsed_ip(self) -> None:
         class FakeClient:
@@ -110,6 +187,140 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["command"], "check")
         self.assertEqual(payload["meta"]["version"], __version__)
         self.assertEqual(payload["meta"]["schema_version"], 1)
+
+    def test_check_offline_returns_negative_exit_code(self) -> None:
+        class FakeClient:
+            def check_online_status(self) -> OnlineStatus:
+                return OnlineStatus(online=False, raw="not_online_error")
+
+        stdout = io.StringIO()
+        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
+            with redirect_stdout(stdout):
+                rc = main(["check", "--host", "portal.example", "--json"])
+
+        self.assertEqual(rc, 1)
+        self.assertFalse(json.loads(stdout.getvalue())["online"])
+
+    def test_login_rejection_preserves_response_and_returns_one(self) -> None:
+        class FakeClient:
+            def build_auth_request(self, **kwargs):
+                return {"action": "login"}
+
+            def submit_auth(self, request):
+                return AuthResult(
+                    request=dict(request),
+                    body='C_a_l_l_b_a_c_k({"error":"E2553","error_msg":"rejected"})',
+                )
+
+        stdout = io.StringIO()
+        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
+            with redirect_stdout(stdout):
+                rc = main(
+                    [
+                        "login",
+                        "--host",
+                        "portal.example",
+                        "--username",
+                        "alice",
+                        "--password",
+                        "secret",
+                        "--json",
+                    ]
+                )
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(json.loads(stdout.getvalue())["error"], "E2553")
+
+    def test_login_check_after_uses_observed_online_state(self) -> None:
+        class FakeClient:
+            def build_auth_request(self, **kwargs):
+                return {"action": "login"}
+
+            def submit_auth(self, request):
+                return AuthResult(
+                    request=dict(request),
+                    body='C_a_l_l_b_a_c_k({"error":"E2620"})',
+                )
+
+            def check_online_status(self) -> OnlineStatus:
+                return OnlineStatus(online=True, username="alice")
+
+        stdout = io.StringIO()
+        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
+            with redirect_stdout(stdout):
+                rc = main(
+                    [
+                        "login",
+                        "--host",
+                        "portal.example",
+                        "--username",
+                        "alice",
+                        "--password",
+                        "secret",
+                        "--check-after",
+                        "--json",
+                    ]
+                )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(json.loads(stdout.getvalue())["status"]["online"])
+
+    def test_logout_check_after_requires_offline_state(self) -> None:
+        class FakeClient:
+            def build_auth_request(self, **kwargs):
+                return {"action": "logout"}
+
+            def submit_auth(self, request):
+                return AuthResult(
+                    request=dict(request),
+                    body='C_a_l_l_b_a_c_k({"error":"ok"})',
+                )
+
+            def check_online_status(self) -> OnlineStatus:
+                return OnlineStatus(online=True, username="alice")
+
+        stdout = io.StringIO()
+        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
+            with redirect_stdout(stdout):
+                rc = main(
+                    [
+                        "logout",
+                        "--host",
+                        "portal.example",
+                        "--username",
+                        "alice",
+                        "--check-after",
+                        "--json",
+                    ]
+                )
+
+        self.assertEqual(rc, 1)
+        self.assertTrue(json.loads(stdout.getvalue())["status"]["online"])
+
+    def test_debug_and_network_errors_redact_signed_fields(self) -> None:
+        params = {
+            "username": "alice",
+            "password": "derived-password-value",
+            "info": "signed-info-value",
+            "chksum": "checksum-value",
+        }
+        stderr = io.StringIO()
+        with patch(
+            "auth_ecnu.client.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("offline"),
+        ) as urlopen:
+            with redirect_stderr(stderr), self.assertRaises(NetworkError) as caught:
+                get_text("https://portal.example/cgi-bin/srun_portal", params, debug=True)
+
+        combined = stderr.getvalue() + str(caught.exception)
+        self.assertNotIn("derived-password-value", combined)
+        self.assertNotIn("signed-info-value", combined)
+        self.assertNotIn("checksum-value", combined)
+        self.assertIn("redacted", combined)
+        request_url = urlopen.call_args.args[0].full_url
+        self.assertIn("derived-password-value", request_url)
+        self.assertIn("signed-info-value", request_url)
+        self.assertIn("checksum-value", request_url)
 
     def test_parse_auth_setting(self) -> None:
         setting = parse_setting_text(
@@ -187,6 +398,10 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "usage_error")
 
     def test_invalid_host_scheme_routes_to_usage_error(self) -> None:
+        provider = SrunUrlProvider.from_host("https://login.ecnu.edu.cn")
+        self.assertEqual(provider.protocol, "https")
+        self.assertEqual(provider.host, "login.ecnu.edu.cn")
+
         with self.assertRaises(ValueError):
             SrunUrlProvider.from_host("ftp://example.invalid")
 
@@ -249,6 +464,21 @@ class AuthEcnuTests(unittest.TestCase):
                 rc = main(["check", "--host", "portal.example", "--quiet"])
 
         self.assertEqual(rc, 0)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_quiet_offline_check_returns_one_without_output(self) -> None:
+        class FakeClient:
+            def check_online_status(self) -> OnlineStatus:
+                return OnlineStatus(online=False, raw="not_online_error")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = main(["check", "--host", "portal.example", "--quiet"])
+
+        self.assertEqual(rc, 1)
         self.assertEqual(stdout.getvalue(), "")
         self.assertEqual(stderr.getvalue(), "")
 

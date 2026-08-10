@@ -12,7 +12,7 @@ field as `srun_bx1`, which is the protocol name used here.
 ## Endpoint surface
 
 A single SRun portal exposes four URLs, all relative to a portal host
-like `http://172.20.20.11`:
+like `https://login.ecnu.edu.cn`:
 
 | URL                          | Method | Purpose                                              |
 | ---------------------------- | ------ | ---------------------------------------------------- |
@@ -69,7 +69,9 @@ from the config file, which is faster and avoids one round-trip.
 
 `token` is the challenge — a short opaque string the portal issues
 per call to `get_challenge`. It is the keying material for the
-encrypted `info` field and is interleaved into the checksum.
+encrypted `info` field and the HMAC-MD5 password digest, and is
+interleaved into the checksum. If the caller did not specify an IP,
+the client also adopts `online_ip` or `client_ip` from this response.
 
 ## Field reference
 
@@ -83,12 +85,12 @@ always strings on the wire.
 | `ac_id`        | yes             | `1`                    | Config / autodetect                                      |
 | `n`            | yes             | `200`                  | Constant                                                 |
 | `type`         | yes             | `1`                    | Constant                                                 |
-| `double_stack` | yes             | `1`                    | Constant                                                 |
-| `ip`           | yes             | `192.0.2.10` or empty  | Caller (empty = let portal infer)                        |
+| `double_stack` | yes             | `0`                    | ECNU single-stack portal setting                         |
+| `ip`           | yes             | `192.0.2.10` or empty  | Caller, then challenge response, then empty              |
 | `username`     | yes             | `alice`                | Caller                                                   |
 | `info`         | yes             | `{SRBX1}…`             | Computed (see below)                                     |
-| `password`     | **login only**  | `{MD5}5ebe22…`         | `{MD5}` + MD5 hex of plaintext                           |
-| `chksum`       | yes             | `31788c4f…` (40 hex)   | Computed (see below)                                     |
+| `password`     | **login only**  | `{MD5}9e911c…`         | `{MD5}` + HMAC-MD5 hex keyed by challenge token          |
+| `chksum`       | yes             | `f961ac3e…` (40 hex)   | Computed (see below)                                     |
 
 Logout requests use the same map *minus* the `password` field. The
 checksum composition also differs between login and logout — see
@@ -208,14 +210,14 @@ info = "{SRBX1}" + quirk_base64(xencode(json(authInfo), token))
 For login requests only. Format:
 
 ```
-pwd_field = "{MD5}" + lower(hex(MD5(plaintext_password)))
+pwd_field = "{MD5}" + lower(hex(HMAC-MD5(key=token, message=password)))
 ```
 
 Logout requests omit `password` entirely.
 
-Be aware: the MD5 of the password is also interleaved into the login
-`chksum`, so the password is effectively committed to twice — once
-encrypted inside `info`, once hashed in `chksum`.
+The HMAC-MD5 digest is also interleaved into the login `chksum`. The
+challenge token changes for each attempt, so the digest changes even
+when the password does not.
 
 ## Checksum
 
@@ -228,7 +230,7 @@ server-side as a tamper / replay guard.
 ```
 chksum = sha1_hex(
     token + username +
-    token + md5_hex(password) +
+    token + hmac_md5_hex(token, password) +
     token + ac_id +
     token + ip +
     token + n            (the literal "200")
@@ -252,8 +254,9 @@ chksum = sha1_hex(
 
 Notes:
 
-- The MD5 hex used here is the **bare** hex digest, *without* the
-  `{MD5}` prefix that goes in the request's `password` field.
+- The HMAC-MD5 hex used here is the **bare** hex digest, *without* the
+  `{MD5}` prefix that goes in the request's `password` field. The
+  token is the HMAC key and the plaintext password is the message.
 - `info` is the full value **with** the `{SRBX1}` prefix.
 - All values are concatenated as UTF-8 text.
 
@@ -275,7 +278,7 @@ action fixture: login
 Computed intermediates:
 
 ```text
-md5_hex(password) = 5ebe2294ecd0e0f08eab7690d2a6ee69
+hmac_md5_hex(token, password) = 9e911cbda10e08c868da0db662595a8c
 
 info_json = {"acid":"1","enc_ver":"srun_bx1","ip":"192.0.2.10","password":"secret","username":"alice"}
 
@@ -286,7 +289,7 @@ xencode(info_json, token) bytes (hex):
 
 info = {SRBX1}rumSFtK0lodivvxUHcPuOE20tJkuRQh/c/zvInxKnCkh6t904t8rLe9APJfpvs7Al/8NT5V0k8vnIvv1rEy5uXMj2PXMcdKM+X1dNlJVNyEgKK+lY8VD4FjtyUokAe0d
 
-chksum = 31788c4f2352942da2b506e9a1015569416f5744
+chksum = f961ac3edbc36e285a68cb52122563cca05f2296
 ```
 
 Final request map (before adding `callback`):
@@ -296,12 +299,12 @@ action       = login
 ac_id        = 1
 n            = 200
 type         = 1
-double_stack = 1
+double_stack = 0
 ip           = 192.0.2.10
 username     = alice
 info         = {SRBX1}rumSFtK0lodivvxUHcPuOE20tJkuRQh/c/zvInxKnCkh6t904t8rLe9APJfpvs7Al/8NT5V0k8vnIvv1rEy5uXMj2PXMcdKM+X1dNlJVNyEgKK+lY8VD4FjtyUokAe0d
-password     = {MD5}5ebe2294ecd0e0f08eab7690d2a6ee69
-chksum       = 31788c4f2352942da2b506e9a1015569416f5744
+password     = {MD5}9e911cbda10e08c868da0db662595a8c
+chksum       = f961ac3edbc36e285a68cb52122563cca05f2296
 ```
 
 If your implementation produces the same `chksum` for these inputs,
@@ -328,12 +331,13 @@ PY
 
 ## Challenge endpoint
 
-`GET /cgi-bin/get_challenge?ip=<ip>&username=<username>&double_stack=1&callback=C_a_l_l_b_a_c_k`
+`GET /cgi-bin/get_challenge?ip=<ip>&username=<username>&callback=C_a_l_l_b_a_c_k`
 
 Response is JSONP. Strip `C_a_l_l_b_a_c_k(…)` and parse the JSON
-object inside. Use the `challenge` field; everything else is
-informational. The token is short-lived; build the signed request
-immediately and submit it without sleeping.
+object inside. Use the `challenge` field as the token. When the caller
+left `ip` empty, use the first non-empty string from `online_ip` and
+`client_ip` as the signed request IP. The token is short-lived; build
+the signed request immediately and submit it without sleeping.
 
 ## Online status
 

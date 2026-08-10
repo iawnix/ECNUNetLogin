@@ -48,9 +48,11 @@ auth_ecnu run run.json
 - `--config FILE` / `-c` — path to an auth-setting file. Defaults to
   `${XDG_CONFIG_HOME:-~/.config}/auth_ecnu/setting`. See
   [config.md](config.md) for the schema.
-- `--host HOST` / `-H` — SRun portal host (e.g. `172.20.20.11`).
+- `--host HOST` / `-H` — SRun portal URL or host. ECNU should use
+  `https://login.ecnu.edu.cn`; bare hosts retain HTTP compatibility.
 - `--timeout SECONDS` — per-request timeout (default 8).
-- `--debug` / `-d` — print each outbound URL to stderr.
+- `--debug` / `-d` — print each outbound URL to stderr. Signed fields
+  (`password`, `info`, `chksum`) are redacted.
 
 ## Identity
 
@@ -71,7 +73,7 @@ Pick exactly one of:
 
 ## Request shaping
 
-- `--ip IP` — bind to a client IP; empty lets the portal infer.
+- `--ip IP` — signed client IP; empty uses the challenge response when available.
 - `--acid N` — portal `ac_id`; defaults to the config or auto-detect.
 - `--preview` — print the signed request without submitting it. Useful
   for inspecting before going live.
@@ -85,6 +87,9 @@ Pick exactly one of:
 - `--json` — shortcut for `--output json`.
 - `--quiet` / `-q` — shortcut for `--output quiet` (silence stdout
   and stderr; convey results via exit code only).
+
+`check` exits `0` when online and `1` when offline. Login/logout also
+exit `1` when the portal returns a valid rejection.
 
 ## Run files
 

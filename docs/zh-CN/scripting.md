@@ -18,13 +18,13 @@
 
 ## JSON 输出信封
 
-每次成功调用都是一个 JSON 对象，包含数据 + 顶层 `meta`。错误调用
-包含 `error` + `meta`。
+每个未发生异常的结果都是一个 JSON 对象，包含数据 + 顶层 `meta`。
+运行错误则包含 `error` + `meta`。
 
 ```json
 "meta": {
   "tool": "auth_ecnu",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "command": "check",
   "schema_version": 1
 }
@@ -38,7 +38,7 @@
 ```json
 {
   "ip": "198.51.100.10",
-  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.6.0" },
+  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.6.1" },
   "online": true,
   "raw": "alice,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "alice"
@@ -71,6 +71,10 @@ auth_ecnu login -u alice --ask-password --check-after --json
 ```
 
 判断成功请基于 `status.online`，不要基于 `response.suc_msg`。
+
+不带 `--check-after` 时，只有门户响应中的 `error == "ok"` 才返回
+退出码 `0`。带 `--check-after` 时，以实际目标状态为准：登录后在线，
+注销后离线。
 
 ### `--preview`（login / logout）
 
@@ -116,6 +120,7 @@ JSON 模式下错误**写到 stderr**（不是 stdout），格式：
 | 码 | 含义                                                  |
 | -- | ----------------------------------------------------- |
 | 0  | 成功                                                  |
+| 1  | 有效的否定结果：认证被拒绝，或 `check` 检测到离线     |
 | 2  | 用户错：CLI 输入有误，或配置文件有问题                |
 | 3  | 网络错：门户不可达、超时、DNS、TLS                    |
 | 4  | 门户错：门户能连上，但响应不符合预期                  |

@@ -47,9 +47,11 @@ auth_ecnu run run.json
 - `--config FILE` / `-c` —— 配置文件路径。默认
   `${XDG_CONFIG_HOME:-~/.config}/auth_ecnu/setting`。详见
   [config.md](config.md)。
-- `--host HOST` / `-H` —— SRun 门户主机（如 `172.20.20.11`）。
+- `--host HOST` / `-H` —— SRun 门户 URL 或主机。华师大推荐
+  `https://login.ecnu.edu.cn`；裸主机继续兼容 HTTP 部署。
 - `--timeout SECONDS` —— 单次请求超时（默认 8 秒）。
-- `--debug` / `-d` —— 把每次出站请求 URL 打到 stderr。
+- `--debug` / `-d` —— 把每次出站请求 URL 打到 stderr；其中
+  `password`、`info`、`chksum` 会被遮盖。
 
 ## 身份
 
@@ -70,7 +72,7 @@ auth_ecnu run run.json
 
 ## 请求塑形
 
-- `--ip IP` —— 指定客户端 IP；留空让门户自动推断。
+- `--ip IP` —— 指定参与签名的客户端 IP；留空时优先采用 challenge 响应值。
 - `--acid N` —— 门户 `ac_id`；不传则按配置或自动探测。
 - `--preview` —— 仅打印签名后的请求，不真正提交。调试用。
 - `--check-after` —— 认证调用之后立即查询在线状态；与 `--json`
@@ -82,6 +84,9 @@ auth_ecnu run run.json
 - `--json` —— `--output json` 的简写。
 - `--quiet` / `-q` —— `--output quiet` 的简写（抑制 stdout 与
   stderr，结果只通过退出码传递）。
+
+`check` 在线时退出 `0`，离线时退出 `1`；门户明确拒绝登录或注销时
+同样退出 `1`。
 
 ## Run 文件
 
