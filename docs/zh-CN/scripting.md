@@ -2,7 +2,7 @@
 
 > [English](../scripting.md) · 简体中文
 
-本页说明面向机器的接口：JSON 输出、JSON 输入、退出码、`--quiet` 模式。
+本页说明面向机器的接口：JSON 输出、run 文件、退出码、`--quiet` 模式。
 所有输出都带 `schema_version`，跨补丁版本稳定。
 
 ## 输出模式
@@ -24,7 +24,7 @@
 ```json
 "meta": {
   "tool": "auth_ecnu",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "command": "check",
   "schema_version": 1
 }
@@ -38,7 +38,7 @@
 ```json
 {
   "ip": "198.51.100.10",
-  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.5.0" },
+  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.6.0" },
   "online": true,
   "raw": "alice,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "alice"
@@ -120,10 +120,16 @@ JSON 模式下错误**写到 stderr**（不是 stdout），格式：
 | 3  | 网络错：门户不可达、超时、DNS、TLS                    |
 | 4  | 门户错：门户能连上，但响应不符合预期                  |
 
-## <a name="in-json"></a>`--in-json FILE`
+## <a name="run-files"></a>Run 文件
 
-从 JSON 文件读取运行参数，取代逐条 CLI 传参。适合 cron、dotfile
-bootstrap、config-as-data 场景。
+从 JSON 文件读取运行参数，取代很长的一串 CLI 参数：
+
+```bash
+auth_ecnu run run.json
+```
+
+适合 cron、dotfile bootstrap、config-as-data 场景。JSON 文件决定
+具体 action，CLI 只表达"运行这个任务"。
 
 ### Schema（`schema_version: 1`）
 
@@ -149,9 +155,8 @@ bootstrap、config-as-data 场景。
 }
 ```
 
-- `action` —— `login` / `logout` / `check`。
-  CLI 不带子命令时**必填**。
-- 布尔键的行为类似 `--flag`：`true` 启用，`false` / `null` 忽略。
+- `action` —— `login` / `logout` / `check`，必填。
+- 布尔键必须是 JSON boolean：`true` 启用，`false` / `null` 忽略。
 - 值字段的空串 / `null` 视为"未设置"。
 - 未知键静默忽略（向前兼容）。
 
@@ -162,22 +167,17 @@ auth_ecnu input-template --action login > run.json
 auth_ecnu input-template --action check > check.json
 ```
 
-### 两种调用方式
+### 输出覆盖
+
+文件里的 `"output"` 控制输出模式。临时运行时，可以只在 CLI 上覆盖
+输出模式：
 
 ```bash
-# 1. 顶层：action 来自 JSON。
-auth_ecnu --in-json run.json
-
-# 2. CLI 指定子命令，JSON 只填剩下的参数。
-auth_ecnu login --in-json run.json
+auth_ecnu run run.json --json
+auth_ecnu run run.json --quiet
 ```
 
-### 优先级
-
-CLI 显式 flag  >  JSON 文件  >  配置文件  >  内置默认。
-
-也就是说，JSON 里写 `"output": "rich"`，CLI 又传了 `--quiet`，
-最终执行的是 quiet 模式。
+其他运行参数来自 run 文件，然后是普通配置文件，最后是内置默认值。
 
 ### 安全
 
@@ -216,5 +216,5 @@ fi
 可复现的 JSON 登录：
 
 ```bash
-auth_ecnu --in-json /etc/auth_ecnu/cron.json
+auth_ecnu run /etc/auth_ecnu/cron.json
 ```

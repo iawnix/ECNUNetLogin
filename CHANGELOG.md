@@ -3,6 +3,17 @@
 Notable changes per release. Schema follows [Keep a Changelog](https://keepachangelog.com/)
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-07-01
+
+### Added
+- **`auth_ecnu run FILE`** for JSON task files. The file carries
+  `action=login|logout|check` plus the parameters needed for that
+  action. `--json`, `--quiet`, and `--output` may still be passed to
+  override the file's output mode.
+
+### Removed (breaking)
+- **`--in-json FILE`** is removed. Use `auth_ecnu run FILE`.
+
 ## [0.5.0] — 2026-06-30
 
 ### Removed (breaking)

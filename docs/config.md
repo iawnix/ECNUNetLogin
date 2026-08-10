@@ -56,10 +56,10 @@ Pass these at runtime instead:
 ```bash
 auth_ecnu login -u alice --ask-password           # interactive
 echo "$PASS" | auth_ecnu login -u alice --password-stdin   # from env
-auth_ecnu --in-json /run/keys/auth.json          # from a private file
+auth_ecnu run /run/keys/auth.json                # from a private file
 ```
 
-See [scripting.md](scripting.md#in-json) for the JSON input file
+See [scripting.md](scripting.md#run-files) for the JSON run file
 format, including its own security caveats.
 
 ## Migration from `~/.auth-setting`

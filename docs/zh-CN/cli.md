@@ -9,8 +9,9 @@
 | `login`         | 拉取 challenge token、签名请求、提交登录              |
 | `logout`        | 同 `login` 流程，但 `action=logout`                   |
 | `check`         | 调用 `/cgi-bin/rad_user_info`，打印解析后的状态       |
+| `run`           | 运行一个带 `action=login\|logout\|check` 的 JSON 任务文件 |
 | `config`        | 管理配置文件：`config init` / `config show` / `config path` |
-| `input-template`| 输出 `--in-json` 模板（`--action login\|logout\|check`） |
+| `input-template`| 输出 run 文件 JSON 模板（`--action login\|logout\|check`） |
 
 `auth_ecnu --version` / `-V` 打印版本号。
 
@@ -28,7 +29,7 @@ auth_ecnu config init --force                         # 覆盖已存在的文件
 `config init` 会用现有文件里的值作为各字段的默认提示，写入时
 使用 `mode 600`，且**绝不**询问账号密码。
 
-### 生成 `--in-json` 模板
+### 生成 run 文件模板
 
 ```bash
 auth_ecnu input-template --action login > run.json    # 完整模板
@@ -38,7 +39,7 @@ auth_ecnu input-template --action check > check.json  # 精简模板
 编辑文件后：
 
 ```bash
-auth_ecnu --in-json run.json
+auth_ecnu run run.json
 ```
 
 ## 通用 flag
@@ -82,10 +83,11 @@ auth_ecnu --in-json run.json
 - `--quiet` / `-q` —— `--output quiet` 的简写（抑制 stdout 与
   stderr，结果只通过退出码传递）。
 
-## JSON 输入
+## Run 文件
 
-- `--in-json FILE` —— 从 JSON 文件读取运行参数。schema 与优先级
-  规则详见 [scripting.md](scripting.md#in-json)。
+- `auth_ecnu run FILE` —— 从 JSON 文件读取运行参数。schema 详见
+  [scripting.md](scripting.md#run-files)。
+- `auth_ecnu run FILE --json` / `--quiet` —— 不改文件，临时覆盖输出模式。
 
 ## 例子
 
@@ -106,5 +108,5 @@ auth_ecnu login -u alice --ask-password --preview
 auth_ecnu login -u alice --ask-password --check-after --json
 
 # 同上但所有参数来自 JSON 文件
-auth_ecnu --in-json ~/secure/auth.json
+auth_ecnu run ~/secure/auth.json
 ```

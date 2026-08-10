@@ -212,8 +212,8 @@ def _format_setting(setting: AuthSetting) -> str:
     return (
         "# auth_ecnu setting file\n"
         "# WARNING: do not store passwords or other credentials here.\n"
-        "# Pass -u/--ask-password at runtime, or use --in-json with a\n"
-        "# file you keep private (chmod 600).\n"
+        "# Pass -u/--ask-password at runtime, or use 'auth_ecnu run FILE'\n"
+        "# with a JSON file you keep private (chmod 600).\n"
         "\n"
         f'host="{setting.host}"\n'
         f'acid="{setting.acid if setting.acid is not None else 1}"\n'
@@ -330,7 +330,7 @@ def run_config_init(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# input-template subcommand
+# run file and input-template subcommands
 # ---------------------------------------------------------------------------
 
 
@@ -370,6 +370,121 @@ _INPUT_TEMPLATES: dict[str, dict[str, Any]] = {
         "timeout": 8.0,
     },
 }
+
+
+_RUN_ACTIONS = ("login", "logout", "check")
+
+
+def _load_run_file(path: str) -> dict[str, Any]:
+    try:
+        text = Path(path).expanduser().read_text(encoding="utf-8")
+    except OSError as exc:
+        raise UsageError(f"could not read run file {path!r}: {exc}") from exc
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise UsageError(f"run file {path!r} is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise UsageError(f"run file {path!r} must be a JSON object")
+    schema = data.get("schema_version")
+    if schema is not None and schema != 1:
+        raise UsageError(f"run file schema_version {schema!r} not supported (expected 1)")
+    return data
+
+
+def _json_text(data: dict[str, Any], key: str, default: str = "") -> str:
+    value = data.get(key, default)
+    if value is None:
+        return default
+    return str(value)
+
+
+def _json_optional_text(data: dict[str, Any], key: str) -> str | None:
+    value = data.get(key)
+    if value is None or value == "":
+        return None
+    return str(value)
+
+
+def _json_bool(data: dict[str, Any], key: str, default: bool = False) -> bool:
+    value = data.get(key, default)
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    raise UsageError(f"run file field {key!r} must be boolean")
+
+
+def _json_int_or_none(data: dict[str, Any], key: str) -> int | None:
+    value = data.get(key)
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise UsageError(f"run file field {key!r} must be an integer") from exc
+
+
+def _json_timeout(data: dict[str, Any]) -> float:
+    value = data.get("timeout", DEFAULT_TIMEOUT)
+    if value is None or value == "":
+        return DEFAULT_TIMEOUT
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise UsageError("run file field 'timeout' must be a number") from exc
+
+
+def _json_output(data: dict[str, Any], default: str | None = None) -> str | None:
+    value = data.get("output", default)
+    if value is None or value == "":
+        return default
+    value = str(value)
+    if value not in {"rich", "json", "quiet"}:
+        raise UsageError("run file field 'output' must be one of: rich, json, quiet")
+    return value
+
+
+def _namespace_from_run_file(data: dict[str, Any], *, output: str) -> argparse.Namespace:
+    action = data.get("action")
+    if not action:
+        raise UsageError("run file needs an 'action' field")
+    if action not in _RUN_ACTIONS:
+        raise UsageError(f"run file 'action' must be one of {_RUN_ACTIONS}, got {action!r}")
+
+    return argparse.Namespace(
+        command=action,
+        config=_json_optional_text(data, "config"),
+        host=_json_optional_text(data, "host"),
+        timeout=_json_timeout(data),
+        debug=_json_bool(data, "debug"),
+        output=output,
+        username=_json_optional_text(data, "username"),
+        campus_postfix=_json_text(data, "campus_postfix"),
+        password=_json_text(data, "password"),
+        password_stdin=_json_bool(data, "password_stdin"),
+        ask_password=_json_bool(data, "ask_password"),
+        token=_json_optional_text(data, "token"),
+        ip=_json_text(data, "ip"),
+        acid=_json_int_or_none(data, "acid"),
+        preview=_json_bool(data, "preview"),
+        check_after=_json_bool(data, "check_after"),
+    )
+
+
+def run_file(args: argparse.Namespace) -> int:
+    data = _load_run_file(args.file)
+    output = getattr(args, "output", None) or _json_output(data, default="rich") or "rich"
+    args.output = output
+    run_args = _namespace_from_run_file(data, output=output)
+    args.command = run_args.command
+    return {
+        "login": run_login,
+        "logout": run_logout,
+        "check": run_check,
+    }[run_args.command](run_args)
+
+
 def run_input_template(args: argparse.Namespace) -> int:
     action = args.template_action
     template = _INPUT_TEMPLATES.get(action)
@@ -378,7 +493,7 @@ def run_input_template(args: argparse.Namespace) -> int:
             f"no template for action={action!r}; choose from "
             f"{sorted(_INPUT_TEMPLATES)}"
         )
-    # Raw print so the JSON is copy-pasteable straight into a file.
+    # Raw print so the JSON is copy-pasteable straight into a run file.
     print(json.dumps(template, indent=2, sort_keys=True, ensure_ascii=False))
     return 0
 
@@ -417,11 +532,11 @@ def add_password_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--ask-password", action="store_true", help="prompt for password")
 
 
-def add_output_args(parser: argparse.ArgumentParser) -> None:
+def add_output_args(parser: argparse.ArgumentParser, *, default: Any = "rich") -> None:
     parser.add_argument(
         "--output",
         choices=("rich", "json", "quiet"),
-        default="rich",
+        default=default,
         help="rich (human), json (machine), or quiet (exit code only)",
     )
     parser.add_argument(
@@ -454,21 +569,6 @@ def add_auth_flow_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--check-after", action="store_true", help="query online status after the request")
 
 
-def add_in_json_arg(parser: argparse.ArgumentParser) -> None:
-    """Declare --in-json for help display only.
-
-    The flag is actually consumed by :func:`_expand_in_json` before
-    argparse runs, so the value stored here is always ``None``. Keeping
-    it on every parser ensures ``--help`` mentions it.
-    """
-    parser.add_argument(
-        "--in-json",
-        metavar="FILE",
-        default=None,
-        help="JSON file with run parameters; CLI flags override its values",
-    )
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="auth_ecnu",
@@ -476,7 +576,6 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--version", "-V", action="version", version=f"auth_ecnu {__version__}")
-    add_in_json_arg(parser)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     login = subparsers.add_parser("login", help="fetch token, build request, and submit login")
@@ -486,7 +585,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_output_args(login)
     add_request_build_args(login, default_action="login")
     add_auth_flow_args(login)
-    add_in_json_arg(login)
     login.set_defaults(func=run_login)
 
     logout = subparsers.add_parser("logout", help="fetch token, build request, and submit logout")
@@ -495,14 +593,17 @@ def build_parser() -> argparse.ArgumentParser:
     add_output_args(logout)
     add_request_build_args(logout, default_action="logout")
     add_auth_flow_args(logout)
-    add_in_json_arg(logout)
     logout.set_defaults(func=run_logout)
 
     check = subparsers.add_parser("check", help="query /cgi-bin/rad_user_info")
     add_common_network_args(check)
     add_output_args(check)
-    add_in_json_arg(check)
     check.set_defaults(func=run_check)
+
+    run = subparsers.add_parser("run", help="run a JSON task file")
+    run.add_argument("file", help="JSON task file with action=login/logout/check")
+    add_output_args(run, default=argparse.SUPPRESS)
+    run.set_defaults(func=run_file)
 
     # ── config ───────────────────────────────────────────────────────────
     config_cmd = subparsers.add_parser(
@@ -537,7 +638,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ── input-template ───────────────────────────────────────────────────
     tmpl = subparsers.add_parser(
         "input-template",
-        help="print a --in-json template for an action",
+        help="print a run-file JSON template for an action",
     )
     tmpl.add_argument(
         "--action",
@@ -551,207 +652,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-# ---------------------------------------------------------------------------
-# --in-json pre-processing
-# ---------------------------------------------------------------------------
-
-_TOP_LEVEL_SUBCOMMANDS = (
-    "login", "logout", "check",
-    "config", "input-template",
-)
-_JSON_ACTIONS = ("login", "logout", "check")
-
-# JSON key → CLI flag (value-taking)
-_JSON_VALUE_FLAGS = {
-    "host":           "--host",
-    "username":       "--username",
-    "password":       "--password",
-    "campus_postfix": "--campus-postfix",
-    "ip":             "--ip",
-    "acid":           "--acid",
-    "config":         "--config",
-    "timeout":        "--timeout",
-    "token":          "--token",
-    "output":         "--output",
-}
-
-# JSON key → CLI flag (boolean store_true)
-_JSON_BOOL_FLAGS = {
-    "preview":        "--preview",
-    "check_after":    "--check-after",
-    "debug":          "--debug",
-    "ask_password":   "--ask-password",
-    "password_stdin": "--password-stdin",
-}
-
-# Flags that consume the next argv token as their value (for subcommand sniffing).
-_VALUE_TAKING_FLAGS = frozenset({
-    "--config", "-c",
-    "--host", "-H",
-    "--timeout",
-    "--output",
-    "--username", "-u",
-    "--campus-postfix",
-    "--password", "-p",
-    "--token",
-    "--ip",
-    "--acid",
-    "--in-json",
-})
-
-
-def _load_in_json(path: str) -> dict[str, Any]:
-    try:
-        text = Path(path).expanduser().read_text(encoding="utf-8")
-    except OSError as exc:
-        raise UsageError(f"could not read --in-json file {path!r}: {exc}") from exc
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise UsageError(f"--in-json file {path!r} is not valid JSON: {exc}") from exc
-    if not isinstance(data, dict):
-        raise UsageError(f"--in-json file {path!r} must be a JSON object")
-    schema = data.get("schema_version")
-    if schema is not None and schema != 1:
-        raise UsageError(
-            f"--in-json schema_version {schema!r} not supported (expected 1)"
-        )
-    return data
-
-
-def _argv_has_subcommand(argv: Sequence[str]) -> bool:
-    skip_next = False
-    for tok in argv:
-        if skip_next:
-            skip_next = False
-            continue
-        if tok in _VALUE_TAKING_FLAGS:
-            skip_next = True
-            continue
-        if tok.startswith("-"):
-            continue
-        if tok in _TOP_LEVEL_SUBCOMMANDS:
-            return True
-    return False
-
-
-def _argv_specifies(argv: Sequence[str], flag: str, key: str) -> bool:
-    if flag in argv:
-        return True
-    if any(tok.startswith(flag + "=") for tok in argv):
-        return True
-    # --output has two shortcut aliases.
-    if key == "output" and any(t in argv for t in ("--json", "--quiet", "-q")):
-        return True
-    return False
-
-
-def _preparse_output(argv: Sequence[str]) -> str:
-    """Best-effort output mode before argparse and --in-json expansion.
-
-    ``--in-json`` is read before full argparse parsing, so file-load
-    failures need a small raw-argv pass to respect ``--json`` and
-    ``--quiet`` where possible.
-    """
-    output = "rich"
-    i = 0
-    while i < len(argv):
-        token = argv[i]
-        if token in {"--quiet", "-q"}:
-            output = "quiet"
-        elif token == "--json":
-            output = "json"
-        elif token == "--output" and i + 1 < len(argv):
-            candidate = argv[i + 1]
-            if candidate in {"rich", "json", "quiet"}:
-                output = candidate
-            i += 1
-        elif token.startswith("--output="):
-            candidate = token.split("=", 1)[1]
-            if candidate in {"rich", "json", "quiet"}:
-                output = candidate
-        i += 1
-    return output
-
-
-def _expand_in_json(argv: list[str]) -> list[str]:
-    """Strip ``--in-json PATH`` from argv and splice JSON fields in.
-
-    CLI tokens already in argv take precedence over JSON-supplied ones.
-    Unknown JSON keys are silently ignored for forward compatibility.
-    """
-    new_argv: list[str] = []
-    json_path: str | None = None
-    i = 0
-    while i < len(argv):
-        token = argv[i]
-        if token == "--in-json":
-            if i + 1 >= len(argv):
-                raise UsageError("--in-json requires a file path")
-            json_path = argv[i + 1]
-            i += 2
-            continue
-        if token.startswith("--in-json="):
-            json_path = token.split("=", 1)[1]
-            i += 1
-            continue
-        new_argv.append(token)
-        i += 1
-
-    if json_path is None:
-        return argv
-
-    data = _load_in_json(json_path)
-
-    head: list[str] = []
-    if not _argv_has_subcommand(new_argv):
-        action = data.get("action")
-        if not action:
-            raise UsageError(
-                "--in-json needs either a subcommand on the CLI or an 'action' field in the JSON"
-            )
-        if action not in _JSON_ACTIONS:
-            raise UsageError(
-                f"--in-json 'action' must be one of {_JSON_ACTIONS}, got {action!r}"
-            )
-        head.append(action)
-
-    tail: list[str] = []
-    for key, value in data.items():
-        if key in ("schema_version", "action"):
-            continue
-        if key in _JSON_VALUE_FLAGS:
-            flag = _JSON_VALUE_FLAGS[key]
-            if _argv_specifies(new_argv, flag, key):
-                continue
-            if value is None or value == "":
-                continue
-            tail.extend([flag, str(value)])
-        elif key in _JSON_BOOL_FLAGS:
-            flag = _JSON_BOOL_FLAGS[key]
-            if _argv_specifies(new_argv, flag, key):
-                continue
-            if value:
-                tail.append(flag)
-        # Unknown keys silently dropped.
-
-    return head + new_argv + tail
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
-    if not argv:
-        parser.print_help()
-        return 0
-
-    preparse_output = _preparse_output(argv)
-    try:
-        argv = _expand_in_json(argv)
-    except UsageError as exc:
-        render_error(exc, preparse_output, command="")
-        return exc.exit_code
-
     if not argv:
         parser.print_help()
         return 0
@@ -761,16 +664,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SystemExit as exc:
         return int(exc.code) if isinstance(exc.code, int) else 2
 
-    output = getattr(args, "output", "rich")
-    command = getattr(args, "command", "") or ""
     try:
         return args.func(args)
     except AuthEcnuError as exc:
+        output = getattr(args, "output", "rich") or "rich"
+        command = getattr(args, "command", "") or ""
         render_error(exc, output, command=command)
         return exc.exit_code
     except ValueError as exc:
         # Defensive: any uncaught model-level ValueError surfaces as a usage error.
         wrapped = UsageError(str(exc))
+        output = getattr(args, "output", "rich") or "rich"
+        command = getattr(args, "command", "") or ""
         render_error(wrapped, output, command=command)
         return wrapped.exit_code
 

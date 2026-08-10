@@ -18,8 +18,8 @@
 | 登录成功但 `check` 显示离线                                          | 门户偶尔会接受认证但接入控制器随后踢掉。建议用 `login --check-after --json`，读 `status.online`。                                                      |
 | Rich 输出显示成乱码 `\x1b[...`                                       | 你的终端不支持 256 色。可以 `\| less -R` 或换 `--json` / `--quiet`。                                                                                    |
 | 安装后 `command not found: auth_ecnu`                                | venv 装的：`source .venv/bin/activate` 或直接调 `.venv/bin/auth_ecnu`；pipx 装的：确认 `~/.local/bin` 在 `PATH` 里。                                    |
-| `--in-json schema_version X not supported`                          | JSON 文件的 schema 版本比当前 auth_ecnu 新。升级 auth_ecnu 或者降级 JSON。                                                                              |
-| `--in-json needs ... 'action' field in the JSON`                    | 顶层调用 `auth_ecnu --in-json file.json` 时 JSON 必须含 `"action"`；或者把子命令补到 CLI 上。                                                          |
+| `run file schema_version X not supported`                           | JSON 文件的 schema 版本比当前 auth_ecnu 新。升级 auth_ecnu 或者降级 JSON。                                                                              |
+| `run file needs an 'action' field`                                  | 传给 `auth_ecnu run FILE` 的 JSON 缺少 `"action"`；写成 `"login"`、`"logout"` 或 `"check"`。                                                            |
 | `method=pipx requested but 'pipx' is not installed`                 | 安装器拒绝静默回退到其他方式。装 pipx（`python3 -m pip install --user pipx && pipx ensurepath`）或改用 `--method=venv`。                                |
 
 ## 何时该报 bug

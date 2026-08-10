@@ -2,7 +2,7 @@
 
 > English · [简体中文](zh-CN/scripting.md)
 
-This page covers the machine-facing surface: JSON output, JSON input,
+This page covers the machine-facing surface: JSON output, run files,
 exit codes, and the `--quiet` mode. The shape is stable across patch
 versions and tracked by `schema_version` in every JSON document.
 
@@ -26,7 +26,7 @@ plus a top-level `meta` block. Every error document is an object with
 ```json
 "meta": {
   "tool": "auth_ecnu",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "command": "check",
   "schema_version": 1
 }
@@ -41,7 +41,7 @@ bump it.
 ```json
 {
   "ip": "198.51.100.10",
-  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.5.0" },
+  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.6.0" },
   "online": true,
   "raw": "alice,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "alice"
@@ -125,10 +125,17 @@ In `json` mode, errors go to **stderr** (not stdout) and use this shape:
 | 3    | network error: portal unreachable, timeout, DNS, TLS      |
 | 4    | portal error: portal reachable but response malformed     |
 
-## <a name="in-json"></a>`--in-json FILE`
+## <a name="run-files"></a>Run files
 
-Pass run parameters from a JSON file instead of CLI flags. Useful for
-cron jobs, dotfile bootstrap, and config-as-data workflows.
+Pass run parameters from a JSON file instead of a long command line:
+
+```bash
+auth_ecnu run run.json
+```
+
+This is useful for cron jobs, dotfile bootstrap, and config-as-data
+workflows. The JSON file chooses the action; the CLI only says "run
+this task".
 
 ### Schema (`schema_version: 1`)
 
@@ -154,28 +161,30 @@ cron jobs, dotfile bootstrap, and config-as-data workflows.
 }
 ```
 
-- `action` — `login` / `logout` / `check`.
-  **Required** if you don't pass a subcommand on the CLI.
-- Boolean keys behave like `--flag`: `true` enables, `false`/`null` omits.
+- `action` — `login` / `logout` / `check`; required.
+- Boolean keys must be JSON booleans: `true` enables, `false`/`null` omits.
 - Empty strings and `null` for value keys are treated as "not set".
 - Unknown keys are silently ignored for forward compatibility.
 
-### Two call styles
+Generate a starting point with:
 
 ```bash
-# 1. Top-level: action comes from the JSON file.
-auth_ecnu --in-json run.json
-
-# 2. Subcommand on the CLI; JSON fills in the rest.
-auth_ecnu login --in-json run.json
+auth_ecnu input-template --action login > run.json
+auth_ecnu input-template --action check > check.json
 ```
 
-### Precedence
+### Output override
 
-CLI explicit flag  >  JSON file value  >  config file  >  built-in default.
+The file's `"output"` field controls the output mode. For ad-hoc
+runs, you can override only the output mode from the CLI:
 
-That is, if your JSON has `"output": "rich"` but you pass `--quiet` on
-the command line, the run is quiet.
+```bash
+auth_ecnu run run.json --json
+auth_ecnu run run.json --quiet
+```
+
+Other runtime values come from the run file, then the normal config
+file, then built-in defaults.
 
 ### Security
 
@@ -214,5 +223,5 @@ fi
 Reproducible login from a saved JSON file:
 
 ```bash
-auth_ecnu --in-json /etc/auth_ecnu/cron.json
+auth_ecnu run /etc/auth_ecnu/cron.json
 ```

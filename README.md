@@ -28,7 +28,7 @@ auth_ecnu login  -u USER --ask-password               # login
 auth_ecnu check                                       # am I online?
 auth_ecnu logout -u USER                              # log out
 auth_ecnu check --json                                # for scripts
-auth_ecnu --in-json /etc/auth_ecnu/cron.json          # from a JSON file
+auth_ecnu run /etc/auth_ecnu/cron.json                # from a JSON file
 ```
 
 Full reference: [docs/cli.md](docs/cli.md).
@@ -37,7 +37,7 @@ Full reference: [docs/cli.md](docs/cli.md).
 
 - [docs/install.md](docs/install.md) — install methods, uninstall, status.
 - [docs/cli.md](docs/cli.md) — every subcommand and flag, with examples.
-- [docs/scripting.md](docs/scripting.md) — JSON output schema, `--in-json` input, exit codes, automation patterns.
+- [docs/scripting.md](docs/scripting.md) — JSON output schema, run files, exit codes, automation patterns.
 - [docs/config.md](docs/config.md) — config file format and the **no-credentials** rule.
 - [docs/troubleshooting.md](docs/troubleshooting.md) — error table by symptom.
 - [docs/protocol.md](docs/protocol.md) — normative spec of the SRun `srun_bx1` wire format, with a worked example.

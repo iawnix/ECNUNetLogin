@@ -18,8 +18,8 @@ stderr; that almost always pinpoints which step is misbehaving.
 | Login looks successful but `check` says offline                        | Portal sometimes accepts a login that the access controller then drops. Prefer `login --check-after --json` and read `status.online`.                        |
 | Rich output looks like raw ANSI codes (`\x1b[...`)                     | Your terminal does not support 256-color. Pipe through `less -R`, or use `--json` / `--quiet` for non-interactive shells.                                    |
 | `command not found: auth_ecnu` after install                           | If you installed via `venv`, activate it (`source .venv/bin/activate`) or call `.venv/bin/auth_ecnu` directly. If `pipx`, ensure `~/.local/bin` is on `PATH`. |
-| `--in-json schema_version X not supported`                             | The input JSON's `schema_version` is newer than this build. Update auth_ecnu or downgrade the JSON.                                                          |
-| `--in-json needs ... 'action' field in the JSON`                       | You called `auth_ecnu --in-json file.json` without a subcommand and the JSON also lacks an `action`. Add `"action": "login"` (etc) or pass a subcommand.     |
+| `run file schema_version X not supported`                              | The input JSON's `schema_version` is newer than this build. Update auth_ecnu or downgrade the JSON.                                                          |
+| `run file needs an 'action' field`                                     | The JSON file passed to `auth_ecnu run FILE` lacks an `action`. Add `"action": "login"`, `"logout"`, or `"check"`.                                           |
 | `method=pipx requested but 'pipx' is not installed`                    | Installer refused to fall back to another method. Install pipx (`python3 -m pip install --user pipx && pipx ensurepath`) or rerun with `--method=venv`.      |
 
 ## When to file a bug

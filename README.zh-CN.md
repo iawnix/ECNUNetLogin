@@ -27,7 +27,7 @@ auth_ecnu login  -u USER --ask-password               # 登录
 auth_ecnu check                                       # 我在线吗？
 auth_ecnu logout -u USER                              # 注销
 auth_ecnu check --json                                # 给脚本用
-auth_ecnu --in-json /etc/auth_ecnu/cron.json          # 从 JSON 文件读取参数
+auth_ecnu run /etc/auth_ecnu/cron.json                # 从 JSON 文件读取参数
 auth_ecnu config init                                 # 重新写一份配置
 auth_ecnu input-template --action login > run.json    # 生成 JSON 模板
 ```
@@ -38,7 +38,7 @@ auth_ecnu input-template --action login > run.json    # 生成 JSON 模板
 
 - [docs/zh-CN/install.md](docs/zh-CN/install.md) —— 安装方式、卸载、状态查询
 - [docs/zh-CN/cli.md](docs/zh-CN/cli.md) —— 子命令与 flag 完整参考
-- [docs/zh-CN/scripting.md](docs/zh-CN/scripting.md) —— JSON 输出 schema、`--in-json`、退出码、自动化套路
+- [docs/zh-CN/scripting.md](docs/zh-CN/scripting.md) —— JSON 输出 schema、run 文件、退出码、自动化套路
 - [docs/zh-CN/config.md](docs/zh-CN/config.md) —— 配置文件格式与**不存凭证**铁律
 - [docs/zh-CN/troubleshooting.md](docs/zh-CN/troubleshooting.md) —— 常见错误对照
 - [docs/protocol.md](docs/protocol.md) —— SRun `srun_bx1` 协议规范（英文）

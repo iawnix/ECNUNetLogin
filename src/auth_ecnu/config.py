@@ -7,7 +7,7 @@ Linux/macOS and uses ``%APPDATA%`` on Windows.
 ``host``, ``acid``, ``campus_postfix``, ``campus_url``. **Never** put a
 username or a password here. Unknown keys are silently ignored, so a
 legacy file containing ``username=…`` will not break but also will not
-populate any field; pass ``--username``/``-u`` (or use ``--in-json``)
+populate any field; pass ``--username``/``-u`` (or use ``auth_ecnu run``)
 explicitly each time.
 """
 

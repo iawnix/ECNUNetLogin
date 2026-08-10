@@ -309,7 +309,7 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertTrue(_decode_failed(payload))
         self.assertEqual(payload["raw"], "garbage")
 
-    def test_in_json_top_level_dispatches_via_action_field(self) -> None:
+    def test_run_file_dispatches_via_action_field(self) -> None:
         class FakeClient:
             def check_online_status(self) -> OnlineStatus:
                 return OnlineStatus(
@@ -318,8 +318,8 @@ class AuthEcnuTests(unittest.TestCase):
                 )
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            in_json = Path(tmpdir) / "run.json"
-            in_json.write_text(json.dumps({
+            run_json = Path(tmpdir) / "run.json"
+            run_json.write_text(json.dumps({
                 "schema_version": 1,
                 "action": "check",
                 "host": "portal.example",
@@ -329,18 +329,19 @@ class AuthEcnuTests(unittest.TestCase):
             stdout = io.StringIO()
             with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
                 with redirect_stdout(stdout):
-                    rc = main(["--in-json", str(in_json)])
+                    rc = main(["run", str(run_json)])
 
         self.assertEqual(rc, 0)
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["meta"]["command"], "check")
         self.assertEqual(payload["username"], "alice")
 
-    def test_in_json_fills_params_under_explicit_subcommand(self) -> None:
+    def test_run_file_fills_login_params(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            in_json = Path(tmpdir) / "run.json"
-            in_json.write_text(json.dumps({
+            run_json = Path(tmpdir) / "run.json"
+            run_json.write_text(json.dumps({
                 "schema_version": 1,
+                "action": "login",
                 "host": "172.20.20.11",
                 "acid": 1,
                 "username": "alice",
@@ -352,18 +353,19 @@ class AuthEcnuTests(unittest.TestCase):
 
             stdout = io.StringIO()
             with redirect_stdout(stdout):
-                rc = main(["login", "--in-json", str(in_json)])
+                rc = main(["run", str(run_json)])
 
         self.assertEqual(rc, 0)
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["request"]["username"], "alice")
         self.assertEqual(payload["request"]["action"], "login")
 
-    def test_in_json_cli_flags_override_json_values(self) -> None:
+    def test_run_file_cli_output_overrides_json_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            in_json = Path(tmpdir) / "run.json"
-            in_json.write_text(json.dumps({
+            run_json = Path(tmpdir) / "run.json"
+            run_json.write_text(json.dumps({
                 "schema_version": 1,
+                "action": "login",
                 "host": "172.20.20.11",
                 "acid": 1,
                 "username": "alice",
@@ -374,74 +376,70 @@ class AuthEcnuTests(unittest.TestCase):
             }), encoding="utf-8")
 
             stdout = io.StringIO()
-            # --json on CLI must override "output: rich" from JSON.
-            # --username on CLI must override the JSON value.
+            # --json on the run command overrides "output: rich" from JSON.
             with redirect_stdout(stdout):
-                rc = main([
-                    "login", "--in-json", str(in_json),
-                    "--username", "bob", "--json",
-                ])
+                rc = main(["run", str(run_json), "--json"])
 
         self.assertEqual(rc, 0)
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["request"]["username"], "bob")
+        self.assertEqual(payload["request"]["username"], "alice")
 
-    def test_in_json_missing_action_with_no_subcommand_errors(self) -> None:
+    def test_run_file_missing_action_errors(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            in_json = Path(tmpdir) / "run.json"
-            in_json.write_text(json.dumps({"schema_version": 1, "host": "x"}),
+            run_json = Path(tmpdir) / "run.json"
+            run_json.write_text(json.dumps({"schema_version": 1, "host": "x"}),
                                encoding="utf-8")
             stderr = io.StringIO()
             with redirect_stderr(stderr):
-                rc = main(["--in-json", str(in_json)])
+                rc = main(["run", str(run_json)])
             self.assertEqual(rc, 2)
             self.assertIn("action", stderr.getvalue())
 
-    def test_in_json_rejects_removed_alias_action(self) -> None:
+    def test_run_file_rejects_removed_alias_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            in_json = Path(tmpdir) / "run.json"
-            in_json.write_text(json.dumps({"schema_version": 1, "action": "auth"}),
+            run_json = Path(tmpdir) / "run.json"
+            run_json.write_text(json.dumps({"schema_version": 1, "action": "auth"}),
                                encoding="utf-8")
             stderr = io.StringIO()
             with redirect_stderr(stderr):
-                rc = main(["--json", "--in-json", str(in_json)])
+                rc = main(["run", str(run_json), "--json"])
             self.assertEqual(rc, 2)
             payload = json.loads(stderr.getvalue())
             self.assertIn("action", payload["error"]["message"])
             self.assertIn("auth", payload["error"]["message"])
 
-    def test_in_json_unsupported_schema_version_errors(self) -> None:
+    def test_run_file_unsupported_schema_version_errors(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            in_json = Path(tmpdir) / "run.json"
-            in_json.write_text(json.dumps({"schema_version": 99, "action": "check"}),
+            run_json = Path(tmpdir) / "run.json"
+            run_json.write_text(json.dumps({"schema_version": 99, "action": "check"}),
                                encoding="utf-8")
             stderr = io.StringIO()
             with redirect_stderr(stderr):
-                rc = main(["--in-json", str(in_json)])
+                rc = main(["run", str(run_json)])
             self.assertEqual(rc, 2)
             self.assertIn("schema_version", stderr.getvalue())
 
-    def test_in_json_bad_path_errors(self) -> None:
+    def test_run_file_bad_path_errors(self) -> None:
         stderr = io.StringIO()
         with redirect_stderr(stderr):
-            rc = main(["--in-json", "/nonexistent/run.json"])
+            rc = main(["run", "/nonexistent/run.json"])
         self.assertEqual(rc, 2)
         self.assertIn("could not read", stderr.getvalue())
 
-    def test_in_json_preparse_error_respects_json_output(self) -> None:
+    def test_run_file_load_error_respects_json_output(self) -> None:
         stderr = io.StringIO()
         with redirect_stderr(stderr):
-            rc = main(["--json", "--in-json", "/nonexistent/run.json"])
+            rc = main(["run", "/nonexistent/run.json", "--json"])
         self.assertEqual(rc, 2)
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "usage_error")
         self.assertIn("could not read", payload["error"]["message"])
 
-    def test_in_json_preparse_error_respects_quiet_output(self) -> None:
+    def test_run_file_load_error_respects_quiet_output(self) -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            rc = main(["--quiet", "--in-json", "/nonexistent/run.json"])
+            rc = main(["run", "/nonexistent/run.json", "--quiet"])
         self.assertEqual(rc, 2)
         self.assertEqual(stdout.getvalue(), "")
         self.assertEqual(stderr.getvalue(), "")

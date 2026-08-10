@@ -9,8 +9,9 @@
 | `login`    | Fetch a challenge token, sign the request, submit it          |
 | `logout`   | Same flow as `login`, with `action=logout`                    |
 | `check`    | `GET /cgi-bin/rad_user_info` and print the parsed status      |
+| `run`      | Run a JSON task file with `action=login\|logout\|check`       |
 | `config`   | Manage the auth-setting file: `config init`, `config show`, `config path` |
-| `input-template` | Print a `--in-json` template (`--action login\|logout\|check`) |
+| `input-template` | Print a run-file JSON template (`--action login\|logout\|check`) |
 
 `auth_ecnu --version` / `-V` prints the tool version.
 
@@ -29,7 +30,7 @@ auth_ecnu config init --force                         # overwrite existing
 as the default. It writes the file with `mode 600` and never asks
 for credentials.
 
-### Generating an `--in-json` template
+### Generating a run file template
 
 ```bash
 auth_ecnu input-template --action login > run.json    # full template
@@ -39,7 +40,7 @@ auth_ecnu input-template --action check > check.json  # minimal template
 Edit the file, then run:
 
 ```bash
-auth_ecnu --in-json run.json
+auth_ecnu run run.json
 ```
 
 ## Common flags
@@ -85,11 +86,12 @@ Pick exactly one of:
 - `--quiet` / `-q` — shortcut for `--output quiet` (silence stdout
   and stderr; convey results via exit code only).
 
-## JSON input
+## Run files
 
-- `--in-json FILE` — supply run parameters from a JSON file. See
-  [scripting.md](scripting.md#in-json) for the schema and precedence
-  rules.
+- `auth_ecnu run FILE` — run parameters from a JSON file. See
+  [scripting.md](scripting.md#run-files) for the schema.
+- `auth_ecnu run FILE --json` / `--quiet` — override the file's
+  output mode without editing the file.
 
 ## Examples
 
@@ -110,5 +112,5 @@ auth_ecnu login -u alice --ask-password --preview
 auth_ecnu login -u alice --ask-password --check-after --json
 
 # Same login flow but from a JSON file
-auth_ecnu --in-json ~/secure/auth.json
+auth_ecnu run ~/secure/auth.json
 ```

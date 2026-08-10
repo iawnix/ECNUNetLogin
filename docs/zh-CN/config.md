@@ -54,11 +54,11 @@ campus_url=""
 ```bash
 auth_ecnu login -u alice --ask-password                    # 交互式
 echo "$PASS" | auth_ecnu login -u alice --password-stdin   # 从环境变量
-auth_ecnu --in-json /run/keys/auth.json                   # 从私有 JSON 文件
+auth_ecnu run /run/keys/auth.json                         # 从私有 JSON 文件
 ```
 
 JSON 输入文件本身也有安全注意事项，详见
-[scripting.md](scripting.md#in-json)。
+[scripting.md](scripting.md#run-files)。
 
 ## 从 `~/.auth-setting` 迁移
 
