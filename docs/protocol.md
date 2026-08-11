@@ -36,31 +36,25 @@ Notes:
 ## High-level state machine
 
 ```
-                       ┌─────────────────┐
-   ┌──────────────────►│ fetch ac_id     │  (only if not in config)
-   │                   │ GET /           │
-   │                   └────────┬────────┘
-   │                            ▼
-   │                   ┌─────────────────┐
-   │                   │ fetch token     │
-   │                   │ GET /get_challenge
-   │                   └────────┬────────┘
-   │                            ▼
-   │                   ┌─────────────────┐
-   │                   │ build signed    │
-   │                   │ request map     │   (pure CPU)
-   │                   └────────┬────────┘
-   │                            ▼
-   │                   ┌─────────────────┐
-   │                   │ submit request  │
-   │                   │ GET /srun_portal│
-   │                   └────────┬────────┘
-   │                            ▼
-   │                   ┌─────────────────┐
-   └───────────────────│ verify (opt)    │
-                       │ GET /rad_user_info
-                       └─────────────────┘
+query status: GET /rad_user_info
+              |
+         target met? -- yes --> return status
+              |
+              no
+              |
+              v
+fetch ac_id: GET /                 (only if not in config)
+              |
+              v
+fetch token: GET /get_challenge
+              |
+              v
+build signed request and submit: GET /srun_portal
 ```
+
+For `login`, online is the target state; for `logout`, offline is the
+target state. A satisfied target returns without submitting an auth
+request. `--preview` only builds a request and skips this status check.
 
 `ac_id` is the access-controller / portal entry ID — for ECNU's
 deployment it is the constant `1`. The tool can either auto-detect it
@@ -375,10 +369,8 @@ Notes on consuming `error`:
   deployments add extra fields (`username`, `online_ip`, billing
   counters). Be defensive: only treat `error == "ok"` as definitive.
 - The error codes are stable across SRun deployments but `suc_msg`
-  is not. Scripts that need a reliable success signal should follow
-  up with a `check`/`rad_user_info` call — `auth_ecnu login
-  --check-after --json` does this and returns
-  `{"response": {...}, "status": {...}}` in one shot.
+  is not. Scripts that need to verify the post-operation state should
+  run `auth_ecnu check --json` explicitly.
 
 ## Where in the code
 

@@ -26,9 +26,9 @@ is an object with `error` and `meta`.
 ```json
 "meta": {
   "tool": "auth_ecnu",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "command": "check",
-  "schema_version": 1
+  "schema_version": 2
 }
 ```
 
@@ -36,12 +36,14 @@ is an object with `error` and `meta`.
 scripts should branch on the integer; future schema-breaking changes
 bump it.
 
+Output documents and run-file inputs currently use schema version `2`.
+
 ### `check`
 
 ```json
 {
   "ip": "198.51.100.10",
-  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.6.1" },
+  "meta": { "command": "check", "schema_version": 2, "tool": "auth_ecnu", "version": "0.7.0" },
   "online": true,
   "raw": "alice,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "alice"
@@ -55,29 +57,26 @@ bump it.
 
 ### `login` / `logout`
 
-The decoded JSONP response, plus `meta`. Field names vary across SRun
-deployments (`error`, `suc_msg`, sometimes more). Scripts that need a
-stable success signal should use `--check-after`:
-
-```bash
-auth_ecnu login -u alice --ask-password --check-after --json
-```
-
-That returns:
+Before submitting a non-preview request, both commands query the current
+portal status. If the target state is already satisfied, no auth request
+is submitted and the command emits the same status fields as `check`,
+with `meta.command` set to `login` or `logout`:
 
 ```json
 {
   "meta": { "command": "login", ... },
-  "response": { "error": "ok", "suc_msg": "login_ok" },
-  "status":   { "online": true, "username": "alice", "ip": "..." }
+  "online": true,
+  "username": "alice",
+  "ip": "...",
+  "raw": "..."
 }
 ```
 
-Branch on `status.online`, not on `response.suc_msg`.
-
-Without `--check-after`, login/logout returns exit code `0` only when
-the decoded portal response has `error == "ok"`. With `--check-after`,
-the observed target state wins: online for login, offline for logout.
+If a request is needed, the command emits the decoded JSONP response
+plus `meta`; field names vary across SRun deployments (`error`,
+`suc_msg`, sometimes more). It exits `0` only when that response has
+`error == "ok"`. Run `auth_ecnu check --json` explicitly afterward when
+the script must verify the resulting state.
 
 ### `--preview` (login/logout)
 
@@ -113,7 +112,7 @@ In `json` mode, errors go to **stderr** (not stdout) and use this shape:
     "code": "network_error",
     "message": "request failed for http://10.0.0.1/cgi-bin/get_challenge: timed out"
   },
-  "meta": { "command": "login", "schema_version": 1, ... }
+  "meta": { "command": "login", "schema_version": 2, ... }
 }
 ```
 
@@ -142,11 +141,11 @@ This is useful for cron jobs, dotfile bootstrap, and config-as-data
 workflows. The JSON file chooses the action; the CLI only says "run
 this task".
 
-### Schema (`schema_version: 1`)
+### Schema (`schema_version: 2`)
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "action": "login",
   "host": "172.20.20.11",
   "username": "alice",
@@ -159,7 +158,6 @@ this task".
   "timeout": 8.0,
   "output": "json",
   "preview": false,
-  "check_after": true,
   "debug": false,
   "ask_password": false,
   "password_stdin": false

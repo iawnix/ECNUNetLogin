@@ -186,7 +186,7 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["tool"], "auth_ecnu")
         self.assertEqual(payload["meta"]["command"], "check")
         self.assertEqual(payload["meta"]["version"], __version__)
-        self.assertEqual(payload["meta"]["schema_version"], 1)
+        self.assertEqual(payload["meta"]["schema_version"], 2)
 
     def test_check_offline_returns_negative_exit_code(self) -> None:
         class FakeClient:
@@ -202,11 +202,19 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertFalse(json.loads(stdout.getvalue())["online"])
 
     def test_login_rejection_preserves_response_and_returns_one(self) -> None:
+        calls: list[str] = []
+
         class FakeClient:
+            def check_online_status(self) -> OnlineStatus:
+                calls.append("check")
+                return OnlineStatus(online=False, raw="not_online_error")
+
             def build_auth_request(self, **kwargs):
+                calls.append("build")
                 return {"action": "login"}
 
             def submit_auth(self, request):
+                calls.append("submit")
                 return AuthResult(
                     request=dict(request),
                     body='C_a_l_l_b_a_c_k({"error":"E2553","error_msg":"rejected"})',
@@ -230,54 +238,50 @@ class AuthEcnuTests(unittest.TestCase):
 
         self.assertEqual(rc, 1)
         self.assertEqual(json.loads(stdout.getvalue())["error"], "E2553")
+        self.assertEqual(calls, ["check", "build", "submit"])
 
-    def test_login_check_after_uses_observed_online_state(self) -> None:
+    def test_login_skips_request_when_already_online(self) -> None:
         class FakeClient:
             def build_auth_request(self, **kwargs):
-                return {"action": "login"}
+                raise AssertionError("login request must not be built while online")
 
             def submit_auth(self, request):
-                return AuthResult(
-                    request=dict(request),
-                    body='C_a_l_l_b_a_c_k({"error":"E2620"})',
-                )
+                raise AssertionError("login request must not be submitted while online")
 
             def check_online_status(self) -> OnlineStatus:
                 return OnlineStatus(online=True, username="alice")
 
         stdout = io.StringIO()
         with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
-            with redirect_stdout(stdout):
-                rc = main(
-                    [
-                        "login",
-                        "--host",
-                        "portal.example",
-                        "--username",
-                        "alice",
-                        "--password",
-                        "secret",
-                        "--check-after",
-                        "--json",
-                    ]
-                )
+            with patch("auth_ecnu.cli.getpass.getpass", side_effect=AssertionError("password must not be read")):
+                with redirect_stdout(stdout):
+                    rc = main(
+                        [
+                            "login",
+                            "--host",
+                            "portal.example",
+                            "--username",
+                            "alice",
+                            "--ask-password",
+                            "--json",
+                        ]
+                    )
 
         self.assertEqual(rc, 0)
-        self.assertTrue(json.loads(stdout.getvalue())["status"]["online"])
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["online"])
+        self.assertEqual(payload["meta"]["command"], "login")
 
-    def test_logout_check_after_requires_offline_state(self) -> None:
+    def test_logout_skips_request_when_already_offline(self) -> None:
         class FakeClient:
             def build_auth_request(self, **kwargs):
-                return {"action": "logout"}
+                raise AssertionError("logout request must not be built while offline")
 
             def submit_auth(self, request):
-                return AuthResult(
-                    request=dict(request),
-                    body='C_a_l_l_b_a_c_k({"error":"ok"})',
-                )
+                raise AssertionError("logout request must not be submitted while offline")
 
             def check_online_status(self) -> OnlineStatus:
-                return OnlineStatus(online=True, username="alice")
+                return OnlineStatus(online=False, raw="not_online_error")
 
         stdout = io.StringIO()
         with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
@@ -289,13 +293,70 @@ class AuthEcnuTests(unittest.TestCase):
                         "portal.example",
                         "--username",
                         "alice",
-                        "--check-after",
                         "--json",
                     ]
                 )
 
-        self.assertEqual(rc, 1)
-        self.assertTrue(json.loads(stdout.getvalue())["status"]["online"])
+        self.assertEqual(rc, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertFalse(payload["online"])
+        self.assertEqual(payload["meta"]["command"], "logout")
+
+    def test_logout_submits_request_when_online(self) -> None:
+        calls: list[str] = []
+
+        class FakeClient:
+            def check_online_status(self) -> OnlineStatus:
+                calls.append("check")
+                return OnlineStatus(online=True, username="alice")
+
+            def build_auth_request(self, **kwargs):
+                calls.append("build")
+                return {"action": "logout"}
+
+            def submit_auth(self, request):
+                calls.append("submit")
+                return AuthResult(
+                    request=dict(request),
+                    body='C_a_l_l_b_a_c_k({"error":"ok"})',
+                )
+
+        stdout = io.StringIO()
+        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
+            with redirect_stdout(stdout):
+                rc = main(
+                    [
+                        "logout",
+                        "--host",
+                        "portal.example",
+                        "--username",
+                        "alice",
+                        "--json",
+                    ]
+                )
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.loads(stdout.getvalue())["error"], "ok")
+        self.assertEqual(calls, ["check", "build", "submit"])
+
+    def test_check_after_cli_option_is_removed(self) -> None:
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            rc = main(
+                [
+                    "login",
+                    "--host",
+                    "portal.example",
+                    "--username",
+                    "alice",
+                    "--password",
+                    "secret",
+                    "--check-after",
+                ]
+            )
+
+        self.assertEqual(rc, 2)
+        self.assertIn("unrecognized arguments: --check-after", stderr.getvalue())
 
     def test_debug_and_network_errors_redact_signed_fields(self) -> None:
         params = {
@@ -390,9 +451,14 @@ class AuthEcnuTests(unittest.TestCase):
         self.assertEqual(payload["meta"]["command"], "check")
 
     def test_login_without_password_returns_usage_exit_code(self) -> None:
+        class FakeClient:
+            def check_online_status(self) -> OnlineStatus:
+                return OnlineStatus(online=False, raw="not_online_error")
+
         stderr = io.StringIO()
-        with redirect_stderr(stderr):
-            rc = main(["login", "--host", "portal.example", "--username", "alice", "--json"])
+        with patch("auth_ecnu.cli.make_client", return_value=FakeClient()):
+            with redirect_stderr(stderr):
+                rc = main(["login", "--host", "portal.example", "--username", "alice", "--json"])
         self.assertEqual(rc, 2)
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "usage_error")
@@ -550,7 +616,7 @@ class AuthEcnuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             run_json = Path(tmpdir) / "run.json"
             run_json.write_text(json.dumps({
-                "schema_version": 1,
+                "schema_version": 2,
                 "action": "check",
                 "host": "portal.example",
                 "output": "json",
@@ -570,7 +636,7 @@ class AuthEcnuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             run_json = Path(tmpdir) / "run.json"
             run_json.write_text(json.dumps({
-                "schema_version": 1,
+                "schema_version": 2,
                 "action": "login",
                 "host": "172.20.20.11",
                 "acid": 1,
@@ -594,7 +660,7 @@ class AuthEcnuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             run_json = Path(tmpdir) / "run.json"
             run_json.write_text(json.dumps({
-                "schema_version": 1,
+                "schema_version": 2,
                 "action": "login",
                 "host": "172.20.20.11",
                 "acid": 1,
@@ -617,7 +683,7 @@ class AuthEcnuTests(unittest.TestCase):
     def test_run_file_missing_action_errors(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_json = Path(tmpdir) / "run.json"
-            run_json.write_text(json.dumps({"schema_version": 1, "host": "x"}),
+            run_json.write_text(json.dumps({"schema_version": 2, "host": "x"}),
                                encoding="utf-8")
             stderr = io.StringIO()
             with redirect_stderr(stderr):
@@ -628,7 +694,7 @@ class AuthEcnuTests(unittest.TestCase):
     def test_run_file_rejects_removed_alias_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_json = Path(tmpdir) / "run.json"
-            run_json.write_text(json.dumps({"schema_version": 1, "action": "auth"}),
+            run_json.write_text(json.dumps({"schema_version": 2, "action": "auth"}),
                                encoding="utf-8")
             stderr = io.StringIO()
             with redirect_stderr(stderr):
@@ -638,10 +704,10 @@ class AuthEcnuTests(unittest.TestCase):
             self.assertIn("action", payload["error"]["message"])
             self.assertIn("auth", payload["error"]["message"])
 
-    def test_run_file_unsupported_schema_version_errors(self) -> None:
+    def test_run_file_old_schema_version_errors(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_json = Path(tmpdir) / "run.json"
-            run_json.write_text(json.dumps({"schema_version": 99, "action": "check"}),
+            run_json.write_text(json.dumps({"schema_version": 1, "action": "check"}),
                                encoding="utf-8")
             stderr = io.StringIO()
             with redirect_stderr(stderr):
@@ -680,10 +746,11 @@ class AuthEcnuTests(unittest.TestCase):
             rc = main(["input-template", "--action", "login"])
         self.assertEqual(rc, 0)
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["schema_version"], 2)
         self.assertEqual(payload["action"], "login")
         self.assertIn("host", payload)
         self.assertIn("username", payload)
+        self.assertNotIn("check_after", payload)
 
     def test_input_template_no_meta_block(self) -> None:
         # Templates are raw JSON so users can copy-paste into a file.

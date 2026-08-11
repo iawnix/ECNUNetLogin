@@ -24,21 +24,23 @@
 ```json
 "meta": {
   "tool": "auth_ecnu",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "command": "check",
-  "schema_version": 1
+  "schema_version": 2
 }
 ```
 
 `schema_version` 是本文档承诺的契约，下游脚本应基于该整数做分支；
 未来不兼容的 schema 变更会递增该号。
 
+输出文档与 run 文件输入当前均使用 schema `2`。
+
 ### `check`
 
 ```json
 {
   "ip": "198.51.100.10",
-  "meta": { "command": "check", "schema_version": 1, "tool": "auth_ecnu", "version": "0.6.1" },
+  "meta": { "command": "check", "schema_version": 2, "tool": "auth_ecnu", "version": "0.7.0" },
   "online": true,
   "raw": "alice,1,2,0,0,0,0,0,198.51.100.10,0",
   "username": "alice"
@@ -52,29 +54,24 @@
 
 ### `login` / `logout`
 
-解码后的 JSONP 响应 + `meta`。字段名随 SRun 部署而异
-（`error`、`suc_msg`、有时还多几个）。需要稳定的成功信号时，配
-`--check-after`：
-
-```bash
-auth_ecnu login -u alice --ask-password --check-after --json
-```
-
-会返回：
+提交非 preview 请求前，两个命令都会先查询当前门户状态。目标状态已经
+满足时，不提交认证请求，输出与 `check` 相同的状态字段；
+`meta.command` 仍为 `login` 或 `logout`：
 
 ```json
 {
   "meta": { "command": "login", ... },
-  "response": { "error": "ok", "suc_msg": "login_ok" },
-  "status":   { "online": true, "username": "alice", "ip": "..." }
+  "online": true,
+  "username": "alice",
+  "ip": "...",
+  "raw": "..."
 }
 ```
 
-判断成功请基于 `status.online`，不要基于 `response.suc_msg`。
-
-不带 `--check-after` 时，只有门户响应中的 `error == "ok"` 才返回
-退出码 `0`。带 `--check-after` 时，以实际目标状态为准：登录后在线，
-注销后离线。
+需要提交请求时，命令输出解码后的 JSONP 响应 + `meta`。字段名随 SRun
+部署而异（`error`、`suc_msg`、有时还多几个）；只有响应中的
+`error == "ok"` 才返回退出码 `0`。脚本需要验证操作后的实际状态时，
+请随后显式执行 `auth_ecnu check --json`。
 
 ### `--preview`（login / logout）
 
@@ -108,7 +105,7 @@ JSON 模式下错误**写到 stderr**（不是 stdout），格式：
     "code": "network_error",
     "message": "request failed for http://10.0.0.1/cgi-bin/get_challenge: timed out"
   },
-  "meta": { "command": "login", "schema_version": 1, ... }
+  "meta": { "command": "login", "schema_version": 2, ... }
 }
 ```
 
@@ -136,11 +133,11 @@ auth_ecnu run run.json
 适合 cron、dotfile bootstrap、config-as-data 场景。JSON 文件决定
 具体 action，CLI 只表达"运行这个任务"。
 
-### Schema（`schema_version: 1`）
+### Schema（`schema_version: 2`）
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "action": "login",
   "host": "172.20.20.11",
   "username": "alice",
@@ -153,7 +150,6 @@ auth_ecnu run run.json
   "timeout": 8.0,
   "output": "json",
   "preview": false,
-  "check_after": true,
   "debug": false,
   "ask_password": false,
   "password_stdin": false

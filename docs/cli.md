@@ -77,9 +77,11 @@ Pick exactly one of:
 - `--acid N` — portal `ac_id`; defaults to the config or auto-detect.
 - `--preview` — print the signed request without submitting it. Useful
   for inspecting before going live.
-- `--check-after` — query online status immediately after the auth
-  call. Combined with `--json`, returns a single envelope with both
-  the auth response and the status.
+
+Before submitting, `login` and `logout` query the portal status.
+`login` exits successfully without a request when already online;
+`logout` does the same when already offline. `--preview` only builds
+the request and therefore skips this status short-circuit.
 
 ## Output
 
@@ -113,8 +115,8 @@ auth_ecnu logout -u alice --quiet
 # Inspect the signed request without submitting
 auth_ecnu login -u alice --ask-password --preview
 
-# Login then immediately verify, all under one JSON document
-auth_ecnu login -u alice --ask-password --check-after --json
+# Verify the resulting state explicitly when needed
+auth_ecnu login -u alice --ask-password && auth_ecnu check --json
 
 # Same login flow but from a JSON file
 auth_ecnu run ~/secure/auth.json

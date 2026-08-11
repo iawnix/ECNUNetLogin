@@ -31,6 +31,9 @@ auth_ecnu check --json                                # for scripts
 auth_ecnu run /etc/auth_ecnu/cron.json                # from a JSON file
 ```
 
+`login` and `logout` check the current portal status first and skip
+requests whose target state is already satisfied.
+
 Full reference: [docs/cli.md](docs/cli.md).
 
 ## Documentation

@@ -14,7 +14,7 @@ from .client import SrunClient, decode_jsonp_or_json
 from .config import AuthSetting, default_config_path, load_auth_setting, parse_setting_text
 from .constants import DEFAULT_TIMEOUT
 from .errors import AuthEcnuError, EXIT_NEGATIVE, EXIT_OK, UsageError
-from .models import AuthResult, OnlineStatus, SrunUrlProvider
+from .models import AuthResult, SrunUrlProvider
 from .render import (
     network_step,
     print_data,
@@ -22,7 +22,6 @@ from .render import (
     render_error,
     render_request,
     render_status,
-    status_payload,
 )
 
 
@@ -97,58 +96,57 @@ def _auth_response_succeeded(payload: Mapping[str, Any]) -> bool:
     return payload.get("error") == "ok"
 
 
-def _finish_auth(
+def _target_state_already_satisfied(
     *,
     args: argparse.Namespace,
     client: SrunClient,
+    command: str,
+    desired_online: bool,
+) -> bool:
+    with network_step("checking current online status", args.output):
+        status = client.check_online_status()
+    if status.online is not desired_online:
+        return False
+    render_status(
+        status,
+        args.output,
+        command=command,
+        host=getattr(args, "host", ""),
+    )
+    return True
+
+
+def _finish_auth(
+    *,
+    args: argparse.Namespace,
     result: AuthResult,
     command: str,
     title: str,
-    desired_online: bool,
 ) -> int:
     response = decode_jsonp_or_json(result.body)
-    if not args.check_after:
-        render_auth_response(
-            title,
-            result.body,
-            args.output,
-            decode_jsonp_or_json,
-            command=command,
-        )
-        return EXIT_OK if _auth_response_succeeded(response) else EXIT_NEGATIVE
-
-    with network_step("checking online status", args.output):
-        status = client.check_online_status()
-    if args.output == "json":
-        print_data(
-            {"response": response, "status": status_payload(status)},
-            command,
-        )
-    else:
-        render_auth_response(
-            title,
-            result.body,
-            args.output,
-            decode_jsonp_or_json,
-            command=command,
-        )
-        if args.output == "rich":
-            print()
-        render_status(
-            status,
-            args.output,
-            command=command,
-            host=getattr(args, "host", ""),
-        )
-    return EXIT_OK if status.online is desired_online else EXIT_NEGATIVE
+    render_auth_response(
+        title,
+        result.body,
+        args.output,
+        decode_jsonp_or_json,
+        command=command,
+    )
+    return EXIT_OK if _auth_response_succeeded(response) else EXIT_NEGATIVE
 
 
 def run_login(args: argparse.Namespace) -> int:
     apply_config_defaults(args)
-    password = resolve_password(args, required=True)
     username = normalize_username(args.username, args.campus_postfix)
     client = make_client(args)
     command = _command_name(args)
+    if not args.preview and _target_state_already_satisfied(
+        args=args,
+        client=client,
+        command=command,
+        desired_online=True,
+    ):
+        return EXIT_OK
+    password = resolve_password(args, required=True)
     try:
         with network_step("resolving challenge & signing request", args.output):
             request = client.build_auth_request(
@@ -169,11 +167,9 @@ def run_login(args: argparse.Namespace) -> int:
         result = client.submit_auth(request)
     return _finish_auth(
         args=args,
-        client=client,
         result=result,
         command=command,
         title="Login Response",
-        desired_online=True,
     )
 
 
@@ -182,6 +178,13 @@ def run_logout(args: argparse.Namespace) -> int:
     username = normalize_username(args.username, args.campus_postfix)
     client = make_client(args)
     command = _command_name(args)
+    if not args.preview and _target_state_already_satisfied(
+        args=args,
+        client=client,
+        command=command,
+        desired_online=False,
+    ):
+        return EXIT_OK
     try:
         with network_step("resolving challenge & signing request", args.output):
             request = client.build_auth_request(
@@ -202,11 +205,9 @@ def run_logout(args: argparse.Namespace) -> int:
         result = client.submit_auth(request)
     return _finish_auth(
         args=args,
-        client=client,
         result=result,
         command=command,
         title="Logout Response",
-        desired_online=False,
     )
 
 
@@ -365,7 +366,7 @@ def run_config_init(args: argparse.Namespace) -> int:
 
 _INPUT_TEMPLATES: dict[str, dict[str, Any]] = {
     "login": {
-        "schema_version": 1,
+        "schema_version": 2,
         "action": "login",
         "host": "",
         "username": "",
@@ -374,12 +375,11 @@ _INPUT_TEMPLATES: dict[str, dict[str, Any]] = {
         "ip": "",
         "campus_postfix": "",
         "preview": False,
-        "check_after": True,
         "output": "json",
         "timeout": 8.0,
     },
     "logout": {
-        "schema_version": 1,
+        "schema_version": 2,
         "action": "logout",
         "host": "",
         "username": "",
@@ -387,12 +387,11 @@ _INPUT_TEMPLATES: dict[str, dict[str, Any]] = {
         "ip": "",
         "campus_postfix": "",
         "preview": False,
-        "check_after": True,
         "output": "json",
         "timeout": 8.0,
     },
     "check": {
-        "schema_version": 1,
+        "schema_version": 2,
         "action": "check",
         "host": "",
         "output": "json",
@@ -416,8 +415,8 @@ def _load_run_file(path: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise UsageError(f"run file {path!r} must be a JSON object")
     schema = data.get("schema_version")
-    if schema is not None and schema != 1:
-        raise UsageError(f"run file schema_version {schema!r} not supported (expected 1)")
+    if schema is not None and schema != 2:
+        raise UsageError(f"run file schema_version {schema!r} not supported (expected 2)")
     return data
 
 
@@ -497,7 +496,6 @@ def _namespace_from_run_file(data: dict[str, Any], *, output: str) -> argparse.N
         ip=_json_text(data, "ip"),
         acid=_json_int_or_none(data, "acid"),
         preview=_json_bool(data, "preview"),
-        check_after=_json_bool(data, "check_after"),
     )
 
 
@@ -599,7 +597,6 @@ def add_request_build_args(parser: argparse.ArgumentParser, *, default_action: s
 
 def add_auth_flow_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--preview", action="store_true", help="print the signed request without submitting it")
-    parser.add_argument("--check-after", action="store_true", help="query online status after the request")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -611,7 +608,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", "-V", action="version", version=f"auth_ecnu {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    login = subparsers.add_parser("login", help="fetch token, build request, and submit login")
+    login = subparsers.add_parser("login", help="log in unless the client is already online")
     add_common_network_args(login)
     add_identity_args(login)
     add_password_args(login)
@@ -620,7 +617,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_auth_flow_args(login)
     login.set_defaults(func=run_login)
 
-    logout = subparsers.add_parser("logout", help="fetch token, build request, and submit logout")
+    logout = subparsers.add_parser("logout", help="log out unless the client is already offline")
     add_common_network_args(logout)
     add_identity_args(logout)
     add_output_args(logout)

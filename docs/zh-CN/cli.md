@@ -75,8 +75,10 @@ auth_ecnu run run.json
 - `--ip IP` —— 指定参与签名的客户端 IP；留空时优先采用 challenge 响应值。
 - `--acid N` —— 门户 `ac_id`；不传则按配置或自动探测。
 - `--preview` —— 仅打印签名后的请求，不真正提交。调试用。
-- `--check-after` —— 认证调用之后立即查询在线状态；与 `--json`
-  合用时，会把认证响应与状态以单个 JSON 包返回。
+
+提交请求前，`login` 与 `logout` 会先查询门户状态。已经在线时，`login`
+直接成功且不重复提交请求；已经离线时，`logout` 同样直接成功。
+`--preview` 只构建请求，因此不执行这个状态短路。
 
 ## 输出模式
 
@@ -109,8 +111,8 @@ auth_ecnu logout -u alice --quiet
 # 只看签名后的请求，不提交
 auth_ecnu login -u alice --ask-password --preview
 
-# 登录并立即验证，一个 JSON 文档全搞定
-auth_ecnu login -u alice --ask-password --check-after --json
+# 需要时显式验证操作结果
+auth_ecnu login -u alice --ask-password && auth_ecnu check --json
 
 # 同上但所有参数来自 JSON 文件
 auth_ecnu run ~/secure/auth.json

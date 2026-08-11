@@ -32,6 +32,9 @@ auth_ecnu config init                                 # 重新写一份配置
 auth_ecnu input-template --action login > run.json    # 生成 JSON 模板
 ```
 
+`login` 与 `logout` 会先查询当前门户状态；目标状态已经满足时，不再提交
+重复的认证请求。
+
 完整参考见 [docs/zh-CN/cli.md](docs/zh-CN/cli.md)。
 
 ## 文档

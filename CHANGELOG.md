@@ -3,6 +3,22 @@
 Notable changes per release. Schema follows [Keep a Changelog](https://keepachangelog.com/)
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] — 2026-08-11
+
+### Changed
+- `login` now checks portal status first and returns success without
+  submitting a request when the client is already online.
+- `logout` now checks portal status first and returns success without
+  submitting a request when the client is already offline.
+- JSON output and run-file input schemas are now version `2`; a
+  short-circuited login/logout returns status fields with its original
+  command in `meta.command`.
+
+### Removed (breaking)
+- `--check-after` and the run-file `check_after` field are removed.
+  Use `auth_ecnu check` explicitly when post-operation verification is
+  required. Regenerate schema `1` run files with `input-template`.
+
 ## [0.6.1] — 2026-08-11
 
 ### Fixed
@@ -104,8 +120,8 @@ only `login`/`logout`/`check`.
   `%APPDATA%\auth_ecnu\setting` (Windows). The legacy `~/.auth-setting`
   location is still read transparently as a fallback.
 - **JSON envelope `meta` block** on every successful and error
-  document: `{tool, version, command, schema_version}`. Downstream
-  scripts should branch on `meta.schema_version` (`1` today).
+  document: `{tool, version, command, schema_version}`. Consumers for
+  this release should branch on `meta.schema_version == 1`.
 - **Structured error envelope** in JSON mode:
   `{"error": {"code", "message"}, "meta": {...}}` to stderr.
 - **Granular exit codes**: `0` success, `2` usage error, `3` network
